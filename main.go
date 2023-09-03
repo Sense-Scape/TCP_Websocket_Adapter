@@ -44,6 +44,59 @@ func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32
 	return transmissionState, sessionNumber, sequenceNumber, transmissionSize
 }
 
+/*
+CheckSessionContinuity Checks if the session data has arrived in order
+
+returns whether data arrived in order
+*/
+func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequenceNumber uint32) (bool, bool, bool) {
+
+	sessionContinuous := true
+	newSequence := false
+
+	// Use a closure to store state between function calls
+	previousSequenceNumber := uint32(0) // Variable to be captured by the closure
+	previousSessionNumber := uint32(0)  // Variable to be captured by the closure
+
+	UpdatePreviousSequenceNumber := func(currentSequenceNumber uint32) {
+		previousSequenceNumber = currentSequenceNumber
+	}
+	UpdatePreviousSessionNumber := func(currentSessionNumber uint32) {
+		previousSessionNumber = currentSessionNumber
+	}
+
+	// Now we can check all state variables
+	// Are we the first message in a sequence?
+	bStartSequence := (sequenceNumber == 0)
+	// If we are, we then want to know if that sequence is continuous
+	bSequenceContinuous := (sequenceNumber == previousSequenceNumber+1) // intra
+	// Now if we know about continuity, is this the last message in the sequence?
+	bLastInSequence := transmissionState == 1
+	// Checking if this message belongs to the same sequences
+	SameSession := (sessionNumber == previousSessionNumber) || (sessionNumber == 0) // inter
+
+	// Now we check for continuity
+	if bStartSequence {
+		sessionContinuous = true
+		newSequence = true
+	} else if bStartSequence || (SameSession && !bLastInSequence && bSequenceContinuous) {
+		sessionContinuous = true
+		newSequence = false
+	} else if bLastInSequence && SameSession && bSequenceContinuous {
+		sessionContinuous = true
+		newSequence = false
+	} else {
+		sessionContinuous = false
+		newSequence = true
+	}
+
+	// Now update session states
+	UpdatePreviousSequenceNumber(sequenceNumber)
+	UpdatePreviousSessionNumber(sessionNumber)
+
+	return sessionContinuous, newSequence, bLastInSequence
+}
+
 func main() {
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
@@ -113,11 +166,11 @@ func handleConnection(conn net.Conn) {
 				" Sequence Number " + fmt.Sprint(sequenceNumber) +
 				" Transmission State " + fmt.Sprint(transmissionSize))
 
-			//sessionByteArray := byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
-			byteArray = byteArray[TransportLayerDataSize:]
-
 			// FN
 			// // Compare previous states to see if
+
+			//sessionByteArray := byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
+			byteArray = byteArray[TransportLayerDataSize:]
 
 		}
 	}
