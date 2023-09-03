@@ -67,22 +67,22 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 
 	// Now we can check all state variables
 	// Are we the first message in a sequence?
-	bStartSequence := (sequenceNumber == 0)
+	StartSequence := (sequenceNumber == 0)
 	// If we are, we then want to know if that sequence is continuous
-	bSequenceContinuous := (sequenceNumber == previousSequenceNumber+1) // intra
+	SequenceContinuous := (sequenceNumber == previousSequenceNumber+1) // intra
 	// Now if we know about continuity, is this the last message in the sequence?
-	bLastInSequence := transmissionState == 1
+	LastInSequence := transmissionState == 1
 	// Checking if this message belongs to the same sequences
 	SameSession := (sessionNumber == previousSessionNumber) || (sessionNumber == 0) // inter
 
 	// Now we check for continuity
-	if bStartSequence {
+	if StartSequence {
 		sessionContinuous = true
 		newSequence = true
-	} else if bStartSequence || (SameSession && !bLastInSequence && bSequenceContinuous) {
+	} else if StartSequence || (SameSession && !LastInSequence && SequenceContinuous) {
 		sessionContinuous = true
 		newSequence = false
-	} else if bLastInSequence && SameSession && bSequenceContinuous {
+	} else if LastInSequence && SameSession && SequenceContinuous {
 		sessionContinuous = true
 		newSequence = false
 	} else {
@@ -94,7 +94,7 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 	UpdatePreviousSequenceNumber(sequenceNumber)
 	UpdatePreviousSessionNumber(sessionNumber)
 
-	return sessionContinuous, newSequence, bLastInSequence
+	return sessionContinuous, newSequence, LastInSequence
 }
 
 func main() {
