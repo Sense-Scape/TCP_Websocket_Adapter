@@ -98,12 +98,13 @@ func handleConnection(conn net.Conn) {
 			// Expected byte Format
 			// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
 
+			// Lets first check how many bytes in the transport layer message
 			TransportLayerHeaderSize := 2
 			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize])
 			fmt.Printf("States: %d \n", TransportLayerDataSize)
 			logger.Info().Msg("States:" + fmt.Sprint(TransportLayerDataSize))
 
-			// Lets start by extracting the TCP byte states
+			// The carry on and extract session state information (v1.0.0 of chunk types)
 			SessionLayerHeaderSize := 23
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
 			transmissionState, sessionNumber, sequenceNumber, transmissionSize := ConvertBytesToSessionStates(TCPHeaderBytes)
@@ -112,29 +113,12 @@ func handleConnection(conn net.Conn) {
 				" Sequence Number " + fmt.Sprint(sequenceNumber) +
 				" Transmission State " + fmt.Sprint(transmissionSize))
 
+			//sessionByteArray := byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
 			byteArray = byteArray[TransportLayerDataSize:]
+
 			// FN
 			// // Compare previous states to see if
 
-			// // if it remove the non string bytes
-			// index := 0
-
-			// // We first extract the base chunk identifier size
-			// sourceIdentifierSize := uint16(byteArray[index])<<8 | uint16(byteArray[index+1])
-			// fmt.Println("WebSocket server started at", sourceIdentifierSize)
-
-			// // And skip it
-			// index += int(sourceIdentifierSize)
-
-			// // We then check the JSON document size
-			// JSONDocumentSize := uint16(byteArray[index])<<8 | uint16(byteArray[index+1])
-			// fmt.Println("WebSocket server started at", JSONDocumentSize)
-
-			// index += 2
-
-			// // Then extract the string
-			// str := string(byteArray[int(index) : int(index)+int(JSONDocumentSize)])
-			// fmt.Println(str)
 		}
 	}
 
