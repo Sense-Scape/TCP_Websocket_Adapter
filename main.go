@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+
+	"github.com/rs/zerolog"
 )
 
 /*
@@ -44,24 +46,26 @@ func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32
 
 func main() {
 
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+
 	// Define the port to listen on
 	port := "10005"
 
 	// Create a TCP listener on the specified port
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		fmt.Println("Error:", err)
+		logger.Fatal().Msg("Error:" + err.Error())
 		os.Exit(1)
 	}
 	defer listener.Close()
 
-	fmt.Println("TCP server is listening on port", port)
+	logger.Info().Msg("TCP server is listening on port:" + port)
 
 	// Accept incoming connections
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error:", err)
+			logger.Error().Msg("Error:" + err.Error())
 			continue
 		}
 		go handleConnection(conn)
@@ -71,7 +75,7 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	fmt.Printf("Accepted connection from %s\n", conn.RemoteAddr())
+	//logger.Info.Msg("Accepted connection from %s\n", conn.RemoteAddr())
 
 	// Create a buffer to read incoming data
 	buffer := make([]byte, 512)
