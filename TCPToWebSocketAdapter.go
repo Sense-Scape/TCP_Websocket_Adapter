@@ -17,21 +17,27 @@ func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32
 	fmt.Printf("Byte Array: %v\n", byteArray)
 
 	index := 0
+
+	// Lets first start by extracting the whether this is the finals sequence in session
 	transmissionState := byteArray[index]
 	index += 1
 
-	sessionNumber := binary.LittleEndian.Uint32(byteArray[index : index+4]) //uint32(byteArray[index])<<24 | uint32(byteArray[index+1])<<16 | uint32(byteArray[index+2])<<8 | uint32(byteArray[index+3])
+	// Then we extract session number
+	sessionNumber := binary.LittleEndian.Uint32(byteArray[index : index+4])
 	index += 4
 
-	sequenceNumber := binary.LittleEndian.Uint32(byteArray[index : index+4]) //uint32(byteArray[index])<<24 | uint32(byteArray[index+1])<<16 | uint32(byteArray[index+2])<<8 | uint32(byteArray[index+3])
+	// And sequence number
+	sequenceNumber := binary.LittleEndian.Uint32(byteArray[index : index+4])
 	index += 4
 
-	// Ignoring chunk type
+	// We then ignore chunk type
 	index += 4
-	// Ignoring source identifier
+	// And source identifier
 	index += 6
-	fmt.Printf("index: %d \n", index)
-	transmissionSize := binary.LittleEndian.Uint32(byteArray[index : index+4]) //uint32(byteArray[index])<<24 | uint32(byteArray[index+1])<<16 | uint32(byteArray[index+2])<<8 | uint32(byteArray[index+3])
+	// As there is no support for this at the moment
+
+	// And extract how many bytes were in this session transmission
+	transmissionSize := binary.LittleEndian.Uint32(byteArray[index : index+4])
 
 	return transmissionState, sessionNumber, sequenceNumber, transmissionSize
 }
