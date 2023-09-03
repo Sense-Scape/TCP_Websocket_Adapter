@@ -75,7 +75,7 @@ func main() {
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	//logger.Info.Msg("Accepted connection from %s\n", conn.RemoteAddr())
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 
 	// Create a buffer to read incoming data
 	buffer := make([]byte, 512)
@@ -86,7 +86,7 @@ func handleConnection(conn net.Conn) {
 		// Read data from the connection into the buffer
 		bytesRead, err := conn.Read(buffer)
 		if err != nil {
-			fmt.Println("Error reading:", err)
+			logger.Error().Msg("Error reading:" + err.Error())
 			break
 		}
 
@@ -101,12 +101,16 @@ func handleConnection(conn net.Conn) {
 			TransportLayerHeaderSize := 2
 			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize])
 			fmt.Printf("States: %d \n", TransportLayerDataSize)
+			logger.Info().Msg("States:" + fmt.Sprint(TransportLayerDataSize))
 
 			// Lets start by extracting the TCP byte states
 			SessionLayerHeaderSize := 23
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
 			transmissionState, sessionNumber, sequenceNumber, transmissionSize := ConvertBytesToSessionStates(TCPHeaderBytes)
-			fmt.Printf("States: %d, %d, %d, %d\n", transmissionState, sessionNumber, sequenceNumber, transmissionSize)
+			logger.Info().Msg("States: Transmission State" + string(transmissionState) +
+				" Session Number " + fmt.Sprint(sessionNumber) +
+				" Sequence Number " + fmt.Sprint(sequenceNumber) +
+				" Transmission State " + fmt.Sprint(transmissionSize))
 
 			byteArray = byteArray[TransportLayerDataSize:]
 			// FN
