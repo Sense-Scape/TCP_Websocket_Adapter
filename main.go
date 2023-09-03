@@ -84,6 +84,9 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 	return sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber
 }
 
+func GetJSONStartIndex() int {
+	return 4
+}
 func main() {
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
@@ -120,7 +123,7 @@ func handleConnection(conn net.Conn) {
 	// Create a buffer to read incoming data
 	buffer := make([]byte, 512)
 	var byteArray []byte
-	var SessionByteArray []byte
+	var JSONByteArray []byte
 
 	previousSessionNumber := uint32(0)
 	previousSequenceNumber := uint32(0)
@@ -169,20 +172,31 @@ func handleConnection(conn net.Conn) {
 				" LastInSequence " + fmt.Sprint(LastInSequence))
 
 			if newSequence {
-				SessionByteArray = byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
+
+				JSONStartIndex := GetJSONStartIndex()
+
+				JSONByteArray = byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex : transmissionSize]
+
 			} else if sessionContinuous && !LastInSequence {
-				SessionByteArray = append(SessionByteArray,
-					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize:transmissionSize]...)
+
+				JSONStartIndex := GetJSONStartIndex()
+
+				JSONByteArray = append(JSONByteArray,
+					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
+
 			} else if sessionContinuous && LastInSequence {
-				SessionByteArray = append(SessionByteArray,
-					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize:transmissionSize]...)
-				// pass on
-				str := string(byteArray)
+
+				JSONStartIndex := GetJSONStartIndex()
+
+				JSONByteArray = append(JSONByteArray,
+					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
+
+				str := string(JSONByteArray)
 				logger.Info().Msg(str)
-				// reset
-				SessionByteArray = nil
+
+				JSONByteArray = nil
 			} else {
-				SessionByteArray = nil
+				JSONByteArray = nil
 			}
 
 			byteArray = byteArray[TransportLayerDataSize:]
