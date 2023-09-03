@@ -90,16 +90,20 @@ func handleConnection(conn net.Conn) {
 		// check if byte array is large enough
 		if len(byteArray) > 4096 {
 
-			txSize := binary.LittleEndian.Uint16(byteArray[:2])
-			fmt.Printf("States: %d \n", txSize)
+			// Expected byte Format
+			// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
+
+			TransportLayerHeaderSize := 2
+			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize])
+			fmt.Printf("States: %d \n", TransportLayerDataSize)
 
 			// Lets start by extracting the TCP byte states
-			TCPHeaderSize := 23
-			TCPHeaderBytes := byteArray[2 : TCPHeaderSize+2]
+			SessionLayerHeaderSize := 23
+			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
 			transmissionState, sessionNumber, sequenceNumber, transmissionSize := ConvertBytesToSessionStates(TCPHeaderBytes)
 			fmt.Printf("States: %d, %d, %d, %d\n", transmissionState, sessionNumber, sequenceNumber, transmissionSize)
 
-			byteArray = byteArray[txSize:]
+			byteArray = byteArray[TransportLayerDataSize:]
 			// FN
 			// // Compare previous states to see if
 
