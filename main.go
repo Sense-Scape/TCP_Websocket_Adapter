@@ -14,9 +14,7 @@ getSessionStates is a partial implementation to extract transmission states of T
 
 returns [transmissionState, sessionNumber, sequenceNumber, transmissionSize]
 */
-func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32) {
-
-	fmt.Printf("Byte Array: %v\n", byteArray)
+func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32) {
 
 	index := 0
 
@@ -37,11 +35,9 @@ func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32
 	// And source identifier
 	index += 6
 	// As there is no support for this at the moment
-
+	fmt.Println(index)
 	// And extract how many bytes were in this session transmission
-	transmissionSize := binary.LittleEndian.Uint32(byteArray[index : index+4])
-
-	return transmissionState, sessionNumber, sequenceNumber, transmissionSize
+	return transmissionState, sessionNumber, sequenceNumber
 }
 
 /*
@@ -49,21 +45,10 @@ CheckSessionContinuity Checks if the session data has arrived in order
 
 returns whether data arrived in order
 */
-func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequenceNumber uint32) (bool, bool, bool) {
+func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequenceNumber uint32, previousSessionNumber uint32, previousSequenceNumber uint32) (bool, bool, bool, uint32, uint32) {
 
 	sessionContinuous := true
 	newSequence := false
-
-	// Use a closure to store state between function calls
-	previousSequenceNumber := uint32(0) // Variable to be captured by the closure
-	previousSessionNumber := uint32(0)  // Variable to be captured by the closure
-
-	UpdatePreviousSequenceNumber := func(currentSequenceNumber uint32) {
-		previousSequenceNumber = currentSequenceNumber
-	}
-	UpdatePreviousSessionNumber := func(currentSessionNumber uint32) {
-		previousSessionNumber = currentSessionNumber
-	}
 
 	// Now we can check all state variables
 	// Are we the first message in a sequence?
@@ -74,6 +59,8 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 	LastInSequence := transmissionState == 1
 	// Checking if this message belongs to the same sequences
 	SameSession := (sessionNumber == previousSessionNumber) || (sessionNumber == 0) // inter
+
+	fmt.Println("States: sessionContinuous " + fmt.Sprint(sequenceNumber) + " --> " + fmt.Sprint(previousSequenceNumber))
 
 	// Now we check for continuity
 	if StartSequence {
@@ -91,10 +78,10 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 	}
 
 	// Now update session states
-	UpdatePreviousSequenceNumber(sequenceNumber)
-	UpdatePreviousSessionNumber(sessionNumber)
+	previousSequenceNumber = sequenceNumber
+	previousSessionNumber = sessionNumber
 
-	return sessionContinuous, newSequence, LastInSequence
+	return sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber
 }
 
 func main() {
@@ -133,6 +120,13 @@ func handleConnection(conn net.Conn) {
 	// Create a buffer to read incoming data
 	buffer := make([]byte, 512)
 	var byteArray []byte
+	var SessionByteArray []byte
+
+	previousSessionNumber := uint32(0)
+	previousSequenceNumber := uint32(0)
+	sessionContinuous := false
+	newSequence := false
+	LastInSequence := false
 
 	for {
 
@@ -159,17 +153,38 @@ func handleConnection(conn net.Conn) {
 
 			// The carry on and extract session state information (v1.0.0 of chunk types)
 			SessionLayerHeaderSize := 23
+			transmissionSize := TransportLayerDataSize
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
-			transmissionState, sessionNumber, sequenceNumber, transmissionSize := ConvertBytesToSessionStates(TCPHeaderBytes)
-			logger.Info().Msg("States: Transmission State" + string(transmissionState) +
+			transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
+			logger.Info().Msg("States: Transmission State " + string(transmissionState) +
 				" Session Number " + fmt.Sprint(sessionNumber) +
 				" Sequence Number " + fmt.Sprint(sequenceNumber) +
-				" Transmission State " + fmt.Sprint(transmissionSize))
+				" Transmission Size " + fmt.Sprint(transmissionSize))
 
-			// FN
-			// // Compare previous states to see if
+			// Now we check if the Session in continuous
+			sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
+				CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
+			logger.Info().Msg("States: sessionContinuous " + fmt.Sprint(sessionContinuous) +
+				" newSequence " + fmt.Sprint(newSequence) +
+				" LastInSequence " + fmt.Sprint(LastInSequence))
 
-			//sessionByteArray := byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
+			if newSequence {
+				SessionByteArray = byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize : transmissionSize]
+			} else if sessionContinuous && !LastInSequence {
+				SessionByteArray = append(SessionByteArray,
+					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize:transmissionSize]...)
+			} else if sessionContinuous && LastInSequence {
+				SessionByteArray = append(SessionByteArray,
+					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize:transmissionSize]...)
+				// pass on
+				str := string(byteArray)
+				logger.Info().Msg(str)
+				// reset
+				SessionByteArray = nil
+			} else {
+				SessionByteArray = nil
+			}
+
 			byteArray = byteArray[TransportLayerDataSize:]
 
 		}
