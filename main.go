@@ -43,6 +43,7 @@ func ConvertBytesToSessionStates(byteArray []byte) (byte, uint32, uint32, uint32
 }
 
 func main() {
+
 	// Define the port to listen on
 	port := "10005"
 
