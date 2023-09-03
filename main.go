@@ -111,11 +111,11 @@ func main() {
 			logger.Error().Msg("Error:" + err.Error())
 			continue
 		}
-		go handleConnection(conn)
+		go handleConnectionTCPIncoming(conn)
 	}
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnectionTCPIncoming(conn net.Conn) {
 	defer conn.Close()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
