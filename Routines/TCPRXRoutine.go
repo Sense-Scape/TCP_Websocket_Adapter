@@ -1,5 +1,4 @@
-// Package phocus_api is the wrapper for the http and queueing systems
-package ChunkCPPGoAdapter
+package Routines
 
 import (
 	"encoding/binary"
