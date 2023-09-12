@@ -17,7 +17,7 @@ func main() {
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go Routines.HandleConnectionGoWebSocketOutgoing(dataChannel, &wg)
+	go Routines.HandleWebSocketTransmissions(dataChannel, &wg)
 
 	// Define the port to listen on
 	port := "10005"
@@ -39,7 +39,7 @@ func main() {
 			logger.Error().Msg("Error:" + err.Error())
 			continue
 		}
-		go Routines.HandleConnectionTCPIncomingChunkTypes(dataChannel, conn)
+		go Routines.HandleTCPReceivals(dataChannel, conn)
 	}
 
 	wg.Wait()

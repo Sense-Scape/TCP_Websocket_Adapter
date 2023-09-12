@@ -15,7 +15,7 @@ getSessionStates is a partial implementation to extract transmission states of T
 returns [transmissionState, sessionNumber, sequenceNumber, transmissionSize]
 */
 
-func HandleConnectionTCPIncomingChunkTypes(dataChannel chan<- string, conn net.Conn) {
+func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 	defer conn.Close()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
