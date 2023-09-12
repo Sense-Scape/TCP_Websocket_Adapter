@@ -51,14 +51,14 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 			// Lets first check how many bytes in the transport layer message
 			TransportLayerHeaderSize := 2
 			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize])
-			logger.Info().Msg("TransportLayerDataSize:" + fmt.Sprint(TransportLayerDataSize))
+			logger.Debug().Msg("TransportLayerDataSize:" + fmt.Sprint(TransportLayerDataSize))
 
 			// The carry on and extract session state information (v1.0.0 of chunk types)
 			SessionLayerHeaderSize := 23
 			transmissionSize := TransportLayerDataSize
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
 			transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
-			logger.Info().Msg("States: Transmission State " + string(transmissionState) +
+			logger.Debug().Msg("States: Transmission State " + string(transmissionState) +
 				" Session Number " + fmt.Sprint(sessionNumber) +
 				" Sequence Number " + fmt.Sprint(sequenceNumber) +
 				" Transmission Size " + fmt.Sprint(transmissionSize))
@@ -66,36 +66,36 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 			// Now we check if the Session in continuous
 			sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
 				CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
-			logger.Info().Msg("States: sessionContinuous " + fmt.Sprint(sessionContinuous) +
+			logger.Debug().Msg("States: sessionContinuous " + fmt.Sprint(sessionContinuous) +
 				" newSequence " + fmt.Sprint(newSequence) +
 				" LastInSequence " + fmt.Sprint(LastInSequence))
 
 			if newSequence {
-
+				// Lets start a new receipt sequence
 				JSONStartIndex := GetJSONStartIndex()
 
 				JSONByteArray = byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex : transmissionSize]
 
 			} else if sessionContinuous && !LastInSequence {
-
+				// Lets keep accumulating data as we have not finished this continuos sequence
 				JSONStartIndex := GetJSONStartIndex()
 
 				JSONByteArray = append(JSONByteArray,
 					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
 
 			} else if sessionContinuous && LastInSequence {
-
+				// We have finished the sequence so we can pass on
 				JSONStartIndex := GetJSONStartIndex()
 
 				JSONByteArray = append(JSONByteArray,
 					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
 
 				str := string(JSONByteArray)
-				//logger.Info().Msg(str)
 				dataChannel <- str
 
 				JSONByteArray = nil
 			} else {
+				// There was some error so lets reset
 				JSONByteArray = nil
 			}
 
