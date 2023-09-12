@@ -17,12 +17,10 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func HandleWebSocketTransmissions(dataChannel <-chan string, wg *sync.WaitGroup) {
+func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	logger.Info().Msg("TransportLayerDataSize:")
-
 	router := gin.Default()
 
 	// Allow all origins to connect
@@ -31,23 +29,21 @@ func HandleWebSocketTransmissions(dataChannel <-chan string, wg *sync.WaitGroup)
 		return true
 	}
 
-	router.GET("/public", func(c *gin.Context) {
+	router.GET("/DataTypes/TimeChunk", func(c *gin.Context) {
 
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			logger.Error().Msg(err.Error())
 			return
 		}
-		defer conn.Close()
+		defer WebSocketConnection.Close()
 		for {
-			println("wohoo-----<")
-			dataString := <-dataChannel
-			println("wohoo-----<<")
-			conn.WriteMessage(websocket.TextMessage, []byte(dataString))
+			// Get received JSON data and then
+			// Transmit it and then have a nap
+			JSONDataString := <-dataChannel
+			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
 			time.Sleep(time.Second)
-			logger.Debug().Msg("Transmitting Websocket data")
 		}
 	})
 	router.Run(":10010")
-
 }

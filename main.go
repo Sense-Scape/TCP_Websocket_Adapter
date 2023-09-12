@@ -17,7 +17,7 @@ func main() {
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go Routines.HandleWebSocketTransmissions(dataChannel, &wg)
+	go Routines.HandleWebSocketTimeChunkTransmissions(dataChannel, &wg)
 
 	// Define the port to listen on
 	port := "10005"
