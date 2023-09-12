@@ -17,24 +17,13 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func HandleConnectionGoWebSocketOutgoing(dataChannel <-chan string, wg *sync.WaitGroup) {
+func HandleWebSocketTransmissions(dataChannel <-chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	logger.Info().Msg("TransportLayerDataSize:")
-	println("wohoo-----")
 
 	router := gin.Default()
-
-	// // CORS middleware setup to allow local host access
-	// // CORS: Cross-Origin Resource Sharing
-	// corsConfig := cors.DefaultConfig()
-	// corsConfig.AllowOrigins = []string{"http://localhost:5173/"}
-
-	// // Now we specify that security is required for private
-	// // Therefore other root paths do not require verification
-	// corsGroup := router.Group("/private")
-	// corsGroup.Use(cors.New(corsConfig))
 
 	// Allow all origins to connect
 	// Note that is is not safe
