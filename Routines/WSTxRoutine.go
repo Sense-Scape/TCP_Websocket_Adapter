@@ -2,7 +2,6 @@ package Routines
 
 import (
 	"os"
-	"sync"
 	"time"
 
 	"net/http"
@@ -17,7 +16,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string, wg *sync.WaitGroup) {
+func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string) {
 	defer wg.Done()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
