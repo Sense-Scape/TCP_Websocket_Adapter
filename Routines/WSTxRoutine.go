@@ -17,7 +17,6 @@ var upgrader = websocket.Upgrader{
 }
 
 func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string) {
-	defer wg.Done()
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	router := gin.Default()
