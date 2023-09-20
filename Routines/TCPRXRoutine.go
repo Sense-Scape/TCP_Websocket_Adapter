@@ -21,7 +21,7 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 
 	// Create a buffer to read incoming data
-	buffer := make([]byte, 512)
+
 	var byteArray []byte
 	var JSONByteArray []byte
 
@@ -34,6 +34,7 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 	for {
 
 		// Read data from the connection into the buffer
+		buffer := make([]byte, 512)
 		bytesRead, err := conn.Read(buffer)
 		if err != nil {
 			logger.Error().Msg("Error reading:" + err.Error())
@@ -49,14 +50,19 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 			// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
 
 			// Lets first check how many bytes in the transport layer message
-			TransportLayerHeaderSize := 2
-			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize])
+			TransportLayerHeaderSize_bytes := 2
+			TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize_bytes])
+
+			if TransportLayerDataSize > 4096 {
+				continue
+			}
+
 			logger.Debug().Msg("TransportLayerDataSize:" + fmt.Sprint(TransportLayerDataSize))
 
 			// The carry on and extract session state information (v1.0.0 of chunk types)
-			SessionLayerHeaderSize := 23
+			SessionLayerHeaderSize_bytes := 23
 			transmissionSize := TransportLayerDataSize
-			TCPHeaderBytes := byteArray[TransportLayerHeaderSize : SessionLayerHeaderSize+TransportLayerHeaderSize]
+			TCPHeaderBytes := byteArray[TransportLayerHeaderSize_bytes : SessionLayerHeaderSize_bytes+TransportLayerHeaderSize_bytes]
 			transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
 			logger.Debug().Msg("States: Transmission State " + string(transmissionState) +
 				" Session Number " + fmt.Sprint(sessionNumber) +
@@ -74,21 +80,19 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 				// Lets start a new receipt sequence
 				JSONStartIndex := GetJSONStartIndex()
 
-				JSONByteArray = byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex : transmissionSize]
+				JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
 
 			} else if sessionContinuous && !LastInSequence {
 				// Lets keep accumulating data as we have not finished this continuos sequence
-				JSONStartIndex := GetJSONStartIndex()
-
+				JSONStartIndex := 0
 				JSONByteArray = append(JSONByteArray,
-					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
+					byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
 
 			} else if sessionContinuous && LastInSequence {
 				// We have finished the sequence so we can pass on
-				JSONStartIndex := GetJSONStartIndex()
-
+				JSONStartIndex := 0
 				JSONByteArray = append(JSONByteArray,
-					byteArray[TransportLayerHeaderSize+SessionLayerHeaderSize+JSONStartIndex:transmissionSize]...)
+					byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
 
 				str := string(JSONByteArray)
 				dataChannel <- str
@@ -97,6 +101,8 @@ func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
 			} else {
 				// There was some error so lets reset
 				JSONByteArray = nil
+
+				logger.Error().Msg("Missed bytes, resetting")
 			}
 
 			byteArray = byteArray[TransportLayerDataSize:]
