@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2/Routines"
 
@@ -33,6 +34,24 @@ func main() {
 	if err := decoder.Decode(&serverConfigMap); err != nil {
 		logger.Fatal().Msg("Error decoding JSON:")
 		return
+	}
+
+	// Now try update the logging level and outputs
+	if LoggingConfig, exists := serverConfigMap["LoggingConfig"].(map[string]interface{}); exists {
+		var logLevel = LoggingConfig["LoggingLevel"].(string)
+		logLevel = strings.ToUpper(logLevel)
+
+		if logLevel == "DEBUG" {
+			logger = logger.Level(zerolog.DebugLevel)
+		} else if logLevel == "INFO" {
+			logger = logger.Level(zerolog.InfoLevel)
+		} else if logLevel == "WARNING" {
+			logger = logger.Level(zerolog.WarnLevel)
+		} else if logLevel == "ERROR" {
+			logger = logger.Level(zerolog.ErrorLevel)
+		} else {
+			logger.Fatal().Msg("Error setting log level: " + logLevel)
+		}
 	}
 
 	// Define the TCP port to listen on
