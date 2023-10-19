@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -14,7 +15,8 @@ import (
 func main() {
 
 	// And finally create a logger
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	nullWriter := ioutil.Discard
+	logger := zerolog.New(nullWriter).With().Timestamp().Logger()
 
 	// Open the JSON file for reading
 	file, err := os.Open("Config.json")
@@ -36,8 +38,10 @@ func main() {
 		return
 	}
 
-	// Now try update the logging level and outputs
+	// Now try update the logging level threshold
 	if LoggingConfig, exists := serverConfigMap["LoggingConfig"].(map[string]interface{}); exists {
+
+		// Logging level control
 		var logLevel = LoggingConfig["LoggingLevel"].(string)
 		logLevel = strings.ToUpper(logLevel)
 
@@ -52,6 +56,47 @@ func main() {
 		} else {
 			logger.Fatal().Msg("Error setting log level: " + logLevel)
 		}
+
+		// Logging output control
+		var LogToFile = false
+		var LogToConsole = false
+		var fileName = "test.txt"
+
+		if strings.ToUpper(LoggingConfig["LogToFile"].(string)) == "TRUE" {
+			LogToFile = true
+		}
+		if strings.ToUpper(LoggingConfig["LogToConsole"].(string)) == "TRUE" {
+			LogToConsole = true
+		}
+
+		// Selectively create log file
+		var file *os.File
+		if LogToFile {
+			file, err = os.Create(fileName)
+			if err != nil {
+				logger.Fatal().Msg("Failed to create log file")
+			}
+			defer file.Close()
+		}
+
+		// Create a logger with multiple output writers
+		if LogToFile && LogToConsole {
+			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout}, zerolog.ConsoleWriter{Out: file})
+			logger = zerolog.New(multiWriter)
+		} else if LogToFile && !LogToConsole {
+			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: file})
+			logger = zerolog.New(multiWriter)
+		} else if !LogToFile && LogToConsole {
+			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout})
+			logger = zerolog.New(multiWriter)
+		} else {
+			logger = zerolog.New(nullWriter).With().Timestamp().Logger()
+		}
+
+	} else {
+		logger.Fatal().Msg("LoggingConfig not found")
+		os.Exit(1)
+		return
 	}
 
 	// Define the TCP port to listen on

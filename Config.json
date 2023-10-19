@@ -1,0 +1,8 @@
+{
+    "LoggingConfig": {
+        "LoggingLevel": "Debug",
+        "LogToFile": "False",
+        "LogToConsole": "True"
+    },
+    "RoutineConfig": {}
+}
