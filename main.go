@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -15,20 +14,21 @@ import (
 func main() {
 
 	// And finally create a logger
-	nullWriter := ioutil.Discard
-	logger := zerolog.New(nullWriter).With().Timestamp().Logger()
+	var LogLevel = zerolog.DebugLevel
+	var multiWriter = zerolog.MultiLevelWriter(zerolog.Nop())
+	var logger = zerolog.New(multiWriter).Level(LogLevel).With().Timestamp().Logger()
 
 	// Open the JSON file for reading
-	file, err := os.Open("Config.json")
+	configFile, err := os.Open("Config.json")
 	if err != nil {
 		logger.Fatal().Msg("Config file Config.json not found")
 		os.Exit(1)
 		return
 	}
-	defer file.Close()
+	defer configFile.Close()
 
 	// Create a decoder to read JSON data from the file
-	decoder := json.NewDecoder(file)
+	decoder := json.NewDecoder(configFile)
 
 	// Create a variable to store the decoded JSON data
 	var serverConfigMap map[string]interface{}
@@ -42,19 +42,19 @@ func main() {
 	if LoggingConfig, exists := serverConfigMap["LoggingConfig"].(map[string]interface{}); exists {
 
 		// Logging level control
-		var logLevel = LoggingConfig["LoggingLevel"].(string)
-		logLevel = strings.ToUpper(logLevel)
+		var strLogLevel = LoggingConfig["LoggingLevel"].(string)
+		strLogLevel = strings.ToUpper(strLogLevel)
 
-		if logLevel == "DEBUG" {
-			logger = logger.Level(zerolog.DebugLevel)
-		} else if logLevel == "INFO" {
-			logger = logger.Level(zerolog.InfoLevel)
-		} else if logLevel == "WARNING" {
-			logger = logger.Level(zerolog.WarnLevel)
-		} else if logLevel == "ERROR" {
-			logger = logger.Level(zerolog.ErrorLevel)
+		if strLogLevel == "DEBUG" {
+			LogLevel = zerolog.DebugLevel
+		} else if strLogLevel == "INFO" {
+			LogLevel = zerolog.InfoLevel
+		} else if strLogLevel == "WARNING" {
+			LogLevel = zerolog.WarnLevel
+		} else if strLogLevel == "ERROR" {
+			LogLevel = zerolog.ErrorLevel
 		} else {
-			logger.Fatal().Msg("Error setting log level: " + logLevel)
+			logger.Fatal().Msg("Error setting log level: " + strLogLevel)
 		}
 
 		// Logging output control
@@ -81,17 +81,17 @@ func main() {
 
 		// Create a logger with multiple output writers
 		if LogToFile && LogToConsole {
-			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout}, zerolog.ConsoleWriter{Out: file})
-			logger = zerolog.New(multiWriter)
+			multiWriter = zerolog.MultiLevelWriter(os.Stdout, file)
 		} else if LogToFile && !LogToConsole {
-			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: file})
-			logger = zerolog.New(multiWriter)
+			multiWriter = zerolog.MultiLevelWriter(file)
 		} else if !LogToFile && LogToConsole {
-			multiWriter := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stdout})
-			logger = zerolog.New(multiWriter)
+			multiWriter = zerolog.MultiLevelWriter(os.Stdout)
 		} else {
-			logger = zerolog.New(nullWriter).With().Timestamp().Logger()
+			logger = zerolog.New(multiWriter).With().Timestamp().Logger()
 		}
+
+		logger = zerolog.New(multiWriter).Level(LogLevel).With().Timestamp().Logger()
+		logger = logger.Output(multiWriter)
 
 	} else {
 		logger.Fatal().Msg("LoggingConfig not found")
@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// Define the TCP port to listen on
-	port := "10005"
+	port := "10100"
 	// Create a channel to pass time chunk json docs around
 	TimeChunkDataChannel := make(chan string) // Create an integer channel
 
