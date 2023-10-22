@@ -15,11 +15,17 @@ getSessionStates is a partial implementation to extract transmission states of T
 returns [transmissionState, sessionNumber, sequenceNumber, transmissionSize]
 */
 
-func HandleTCPReceivals(loggingChannel chan map[zerolog.Level]string, dataChannel chan<- string) {
+func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, dataChannel chan<- string) {
 
 	// Define the TCP port to listen on
-	port := "10100"
-
+	var port string
+	if TCPRxConfig, exists := configJson["TCPRxConfig"].(map[string]interface{}); exists {
+		port = TCPRxConfig["Port"].(string)
+	} else {
+		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "TCPRx Config not found")
+		os.Exit(1)
+		return
+	}
 	// Create a TCP listener on the specified port
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {

@@ -42,16 +42,16 @@ func main() {
 
 	routineCount = routineCount + 1
 	GenericChunkChannel := make(chan string)
-	go Routines.HandleTCPReceivals(LoggingChannel, GenericChunkChannel)
+	go Routines.HandleTCPReceivals(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
 
 	routineCount = routineCount + 1
 	go Routines.HandleWebSocketChunkTransmissions(LoggingChannel, GenericChunkChannel)
 
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(60 * time.Second)
 
 		myMap := make(map[zerolog.Level]string)
-		myMap[zerolog.DebugLevel] = "test"
+		myMap[zerolog.DebugLevel] = "Main keep alive"
 
 		LoggingChannel <- myMap
 

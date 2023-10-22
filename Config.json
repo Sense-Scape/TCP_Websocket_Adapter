@@ -3,5 +3,8 @@
         "LoggingLevel": "Debug",
         "LogToFile": "True",
         "LogToConsole": "True"
+    },
+    "TCPRxConfig": {
+        "Port": "10010"
     }
 }
