@@ -100,7 +100,7 @@ func HandleLogging(routineCompleteChannel chan bool, configJson map[string]inter
 }
 
 func CreateLogMessage(logLevel zerolog.Level, messageString string) map[zerolog.Level]string {
-	var logMessage map[zerolog.Level]string
+	logMessage := make(map[zerolog.Level]string)
 	logMessage[logLevel] = messageString
 	return logMessage
 }
