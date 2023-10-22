@@ -60,7 +60,7 @@ func main() {
 		// Logging output control
 		var LogToFile = false
 		var LogToConsole = false
-		var fileName = "test.txt"
+		var fileName = "TCP_Go_WebServer.txt"
 
 		if strings.ToUpper(LoggingConfig["LogToFile"].(string)) == "TRUE" {
 			LogToFile = true
