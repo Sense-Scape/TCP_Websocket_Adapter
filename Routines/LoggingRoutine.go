@@ -77,10 +77,20 @@ func HandleLogging(configJson map[string]interface{}, dataChannel chan map[zerol
 	}
 
 	for {
-		// Get received JSON data and then
-		// Transmit it and then have a nap
-		// levelMessageMap := <-dataChannel
+		levelMessageMap := <-dataChannel
 
+		for logLevelKey, LogMessageString := range levelMessageMap {
+			if logLevelKey == zerolog.DebugLevel {
+				logger.Debug().Msg(LogMessageString)
+			} else if logLevelKey == zerolog.InfoLevel {
+				logger.Info().Msg(LogMessageString)
+			} else if logLevelKey == zerolog.WarnLevel {
+				logger.Warn().Msg(LogMessageString)
+			} else if logLevelKey == zerolog.ErrorLevel {
+				logger.Err().Msg(LogMessageString)
+			} else if logLevelKey == zerolog.FatalLevel {
+				logger.Fatal().Msg(LogMessageString)
+			}
+		}
 	}
-
 }
