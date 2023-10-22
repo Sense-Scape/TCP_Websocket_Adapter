@@ -7,7 +7,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func HandleLogging(routineCompleteChannel chan bool, configJson map[string]interface{}, dataChannel chan map[zerolog.Level]string) {
+func HandleLogging(configJson map[string]interface{}, routineCompleteChannel chan bool, dataChannel chan map[zerolog.Level]string) {
 
 	// And finally create a logger
 	var LogLevel = zerolog.DebugLevel
