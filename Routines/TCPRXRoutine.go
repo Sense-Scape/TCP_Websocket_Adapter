@@ -15,10 +15,29 @@ getSessionStates is a partial implementation to extract transmission states of T
 returns [transmissionState, sessionNumber, sequenceNumber, transmissionSize]
 */
 
-func HandleTCPReceivals(dataChannel chan<- string, conn net.Conn) {
-	defer conn.Close()
+func HandleTCPReceivals(dataChannel chan<- string) {
 
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+
+	// Define the TCP port to listen on
+	port := "10100"
+
+	// Create a TCP listener on the specified port
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		logger.Fatal().Msg("Error:" + err.Error())
+		os.Exit(1)
+	}
+	defer listener.Close()
+	logger.Info().Msg("TCP server is listening on port:" + port)
+
+	conn, err := listener.Accept()
+	if err != nil {
+		logger.Error().Msg("Error:" + err.Error())
+	}
+
+	// Accept incoming TCP connections
+	defer conn.Close()
 
 	// Create a buffer to read incoming data
 
