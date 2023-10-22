@@ -7,11 +7,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func HandleLogging(configJson map[string]interface{}, dataChannel chan map[zerolog.Level]string) {
+func HandleLogging(routineCompleteChannel chan bool, configJson map[string]interface{}, dataChannel chan map[zerolog.Level]string) {
 
 	// And finally create a logger
 	var LogLevel = zerolog.DebugLevel
-	var multiWriter = zerolog.MultiLevelWriter(zerolog.Nop())
+	var multiWriter = zerolog.MultiLevelWriter(os.Stdout)
 	var logger = zerolog.New(multiWriter).Level(LogLevel).With().Timestamp().Logger()
 
 	// Now try update the logging level threshold
@@ -71,10 +71,12 @@ func HandleLogging(configJson map[string]interface{}, dataChannel chan map[zerol
 		logger = logger.Output(multiWriter)
 
 	} else {
-		logger.Fatal().Msg("LoggingConfig not found")
+		logger.Fatal().Msg("Logging Config not found")
 		os.Exit(1)
 		return
 	}
+
+	logger.Info().Msg("Starting logging routine")
 
 	for {
 		levelMessageMap := <-dataChannel
@@ -87,10 +89,12 @@ func HandleLogging(configJson map[string]interface{}, dataChannel chan map[zerol
 			} else if logLevelKey == zerolog.WarnLevel {
 				logger.Warn().Msg(LogMessageString)
 			} else if logLevelKey == zerolog.ErrorLevel {
-				logger.Err().Msg(LogMessageString)
+				logger.Error().Msg(LogMessageString)
 			} else if logLevelKey == zerolog.FatalLevel {
 				logger.Fatal().Msg(LogMessageString)
 			}
 		}
 	}
+
+	routineCompleteChannel <- true
 }
