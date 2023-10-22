@@ -15,9 +15,7 @@ getSessionStates is a partial implementation to extract transmission states of T
 returns [transmissionState, sessionNumber, sequenceNumber, transmissionSize]
 */
 
-func HandleTCPReceivals(dataChannel chan<- string) {
-
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+func HandleTCPReceivals(loggingChannel chan map[zerolog.Level]string, dataChannel chan<- string) {
 
 	// Define the TCP port to listen on
 	port := "10100"
@@ -25,15 +23,15 @@ func HandleTCPReceivals(dataChannel chan<- string) {
 	// Create a TCP listener on the specified port
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		logger.Fatal().Msg("Error:" + err.Error())
+		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "Error:"+err.Error())
 		os.Exit(1)
 	}
 	defer listener.Close()
-	logger.Info().Msg("TCP server is listening on port:" + port)
+	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "TCP server is listening on port:"+port)
 
 	conn, err := listener.Accept()
 	if err != nil {
-		logger.Error().Msg("Error:" + err.Error())
+		loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error:"+err.Error())
 	}
 
 	// Accept incoming TCP connections
@@ -56,7 +54,7 @@ func HandleTCPReceivals(dataChannel chan<- string) {
 		buffer := make([]byte, 512)
 		bytesRead, err := conn.Read(buffer)
 		if err != nil {
-			logger.Error().Msg("Error reading:" + err.Error())
+			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error reading:"+err.Error())
 			break
 		}
 
@@ -76,24 +74,24 @@ func HandleTCPReceivals(dataChannel chan<- string) {
 				continue
 			}
 
-			logger.Debug().Msg("TransportLayerDataSize:" + fmt.Sprint(TransportLayerDataSize))
+			loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "TransportLayerDataSize:"+fmt.Sprint(TransportLayerDataSize))
 
 			// The carry on and extract session state information (v1.0.0 of chunk types)
 			SessionLayerHeaderSize_bytes := 23
 			transmissionSize := TransportLayerDataSize
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize_bytes : SessionLayerHeaderSize_bytes+TransportLayerHeaderSize_bytes]
 			transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
-			logger.Debug().Msg("States: Transmission State " + string(transmissionState) +
-				" Session Number " + fmt.Sprint(sessionNumber) +
-				" Sequence Number " + fmt.Sprint(sequenceNumber) +
-				" Transmission Size " + fmt.Sprint(transmissionSize))
+			loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: Transmission State "+string(transmissionState)+
+				" Session Number "+fmt.Sprint(sessionNumber)+
+				" Sequence Number "+fmt.Sprint(sequenceNumber)+
+				" Transmission Size "+fmt.Sprint(transmissionSize))
 
 			// Now we check if the Session in continuous
 			sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
 				CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
-			logger.Debug().Msg("States: sessionContinuous " + fmt.Sprint(sessionContinuous) +
-				" newSequence " + fmt.Sprint(newSequence) +
-				" LastInSequence " + fmt.Sprint(LastInSequence))
+			loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: sessionContinuous "+fmt.Sprint(sessionContinuous)+
+				" newSequence "+fmt.Sprint(newSequence)+
+				" LastInSequence "+fmt.Sprint(LastInSequence))
 
 			if newSequence {
 				// Lets start a new receipt sequence
@@ -121,7 +119,7 @@ func HandleTCPReceivals(dataChannel chan<- string) {
 				// There was some error so lets reset
 				JSONByteArray = nil
 
-				logger.Error().Msg("Missed bytes, resetting")
+				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Missed bytes, resetting")
 			}
 
 			byteArray = byteArray[TransportLayerDataSize:]
