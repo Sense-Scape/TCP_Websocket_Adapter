@@ -15,7 +15,7 @@ func main() {
 	// Create a decoder to read JSON data from the file
 	// Open the JSON file for reading
 	routineCompleteChannel := make(chan bool)
-
+	var routineCount = 0
 	configFile, err := os.Open("Config.json")
 
 	if err != nil {
@@ -34,10 +34,9 @@ func main() {
 		fmt.Println("Error reading Config.json")
 		return
 	}
-	fmt.Println("Hello, World! - ")
-	LoggingChannel := make(chan map[zerolog.Level]string)
-	fmt.Println("Hello, World! -- ")
 
+	routineCount = routineCount + 1
+	LoggingChannel := make(chan map[zerolog.Level]string)
 	go Routines.HandleLogging(routineCompleteChannel, serverConfigStringMap, LoggingChannel)
 
 	for {
@@ -49,9 +48,10 @@ func main() {
 		LoggingChannel <- myMap
 
 	}
-	for i := 1; i <= 3; i++ {
-		<-routineCompleteChannel
-	}
+
+	// for i := 1; i <= routineCount; i++ {
+	// 	<-routineCompleteChannel
+	// }
 
 	// // Define the TCP port to listen on
 	// port := "10100"
