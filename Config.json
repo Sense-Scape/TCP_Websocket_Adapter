@@ -4,5 +4,7 @@
         "LogToFile": "True",
         "LogToConsole": "True"
     },
-    "RoutineConfig": {}
+    "TCPRxConfig": {
+        "Port": "10010"
+    }
 }

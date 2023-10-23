@@ -1,7 +1,6 @@
 package Routines
 
 import (
-	"os"
 	"time"
 
 	"net/http"
@@ -16,9 +15,8 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string) {
+func HandleWebSocketChunkTransmissions(loggingChannel chan map[zerolog.Level]string, dataChannel <-chan string) {
 
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	router := gin.Default()
 
 	// Allow all origins to connect
@@ -31,7 +29,7 @@ func HandleWebSocketTimeChunkTransmissions(dataChannel <-chan string) {
 
 		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			logger.Error().Msg(err.Error())
+			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Websocket error: "+err.Error())
 			return
 		}
 		defer WebSocketConnection.Close()
