@@ -45,7 +45,7 @@ func main() {
 	go Routines.HandleTCPReceivals(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
 
 	routineCount = routineCount + 1
-	go Routines.HandleWebSocketChunkTransmissions(LoggingChannel, GenericChunkChannel)
+	go Routines.HandleWebSocketChunkTransmissions(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
 
 	for {
 		time.Sleep(60 * time.Second)
