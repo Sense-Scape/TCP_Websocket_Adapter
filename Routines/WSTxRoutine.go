@@ -1,6 +1,7 @@
 package Routines
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 
@@ -26,12 +27,14 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 
 		// Unmarshal the JSON data into the slice
 		// And get registered chunktypes
-		if data, ok := WebSocketTxConfig["WebSocketTxConfig"].([]interface{}); ok {
+		if data, ok := WebSocketTxConfig["RegisteredChunks"].([]interface{}); ok {
 			for _, item := range data {
 				if chunkTypeString, isString := item.(string); isString {
 					registeredChunks = append(registeredChunks, chunkTypeString)
 				}
 			}
+		} else {
+			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "No chunks found to register in chunk map")
 		}
 
 	} else {
@@ -41,25 +44,60 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 	}
 
 	// Now we create a routine that will handle the receipt of JSON messages
-	JSONDataChannel := make(chan string)
-	chunkReceiverRoutine := func(JSONDataChannel chan string, dataChannel <-chan string) {
-		// start up and handle JSON chunks
-		for {
-			// Get received JSON data and then Transmit it
-			JSONDataString := <-dataChannel
-			JSONDataChannel <- JSONDataString
-		}
-	}
-	go chunkReceiverRoutine(JSONDataChannel, dataChannel)
+	var chunkTypeChannelMap = RegisterChunkTypeMap(loggingChannel, registeredChunks)
+	go RunChunkRoutingRoutine(loggingChannel, dataChannel, chunkTypeChannelMap)
 
 	// Then run the HTTP router
-	router := RegisterRouterPaths(loggingChannel, JSONDataChannel)
+	router := RegisterRouterWebSocketPaths(loggingChannel, chunkTypeChannelMap)
 	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
 	router.Run(":" + port)
 
 }
 
-func RegisterRouterPaths(loggingChannel chan map[zerolog.Level]string, JSONDataChannel <-chan string) *gin.Engine {
+func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, registeredChunkTypes []string) map[string](chan string) {
+
+	chunkTypeChannelMap := make(map[string](chan string))
+
+	// Iterate through all chunk types and create a corresponding channel
+	for _, chunkType := range registeredChunkTypes {
+		loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Registering - "+chunkType+" - in Websocket routing map")
+		chunkTypeChannelMap[chunkType] = make(chan string)
+	}
+
+	return chunkTypeChannelMap
+}
+
+func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, chunkTypeRoutingMap map[string](chan string)) {
+
+	// start up and handle JSON chunks
+	for {
+
+		// Unmarshal the JSON string into a map
+		JSONDataString := <-incomingDataChannel
+		var JSONData map[string]interface{}
+		if err := json.Unmarshal([]byte(JSONDataString), &JSONData); err != nil {
+			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON:"+err.Error())
+			return
+		} else {
+			// Then try forward the JSON data onwards
+			var rootKey string
+			for key := range JSONData {
+				rootKey = key
+				break // We assume there's only one root key
+			}
+
+			outGoingChannel, exists := chunkTypeRoutingMap[rootKey]
+
+			if exists {
+				outGoingChannel <- JSONDataString
+			} else {
+				loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+rootKey+" - not registered in routing map")
+			}
+		}
+	}
+}
+
+func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, JSONDataChannel map[string](chan string)) *gin.Engine {
 
 	router := gin.Default()
 
@@ -81,7 +119,7 @@ func RegisterRouterPaths(loggingChannel chan map[zerolog.Level]string, JSONDataC
 
 		for {
 			// Get received JSON data and then Transmit it
-			JSONDataString := <-JSONDataChannel
+			JSONDataString := <-JSONDataChannel["TimeChunk"]
 			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
 		}
 	})
