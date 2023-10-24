@@ -69,6 +69,9 @@ func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, register
 
 func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, chunkTypeRoutingMap map[string](chan string)) {
 
+	// Create an empty array (or slice) of strings
+	var unregisteredChunkTypes []string
+
 	// start up and handle JSON chunks
 	for {
 
@@ -80,19 +83,33 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			return
 		} else {
 			// Then try forward the JSON data onwards
-			var rootKey string
+			var chunkTypeStringKey string
 			for key := range JSONData {
-				rootKey = key
+				chunkTypeStringKey = key
 				break // We assume there's only one root key
 			}
 
-			outGoingChannel, exists := chunkTypeRoutingMap[rootKey]
+			outGoingChannel, exists := chunkTypeRoutingMap[chunkTypeStringKey]
 
 			if exists {
 				outGoingChannel <- JSONDataString
 			} else {
-				loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+rootKey+" - not registered in routing map")
+
+				var chunkTypeAlreadyLogged = false
+				// Now we see if we have logged that this is not supported already
+				for _, LoggedChunkTypeString := range unregisteredChunkTypes {
+					if LoggedChunkTypeString == chunkTypeStringKey {
+						chunkTypeAlreadyLogged = true
+					}
+				}
+
+				// Then log if we have not logged already
+				if !chunkTypeAlreadyLogged {
+					unregisteredChunkTypes = append(unregisteredChunkTypes, chunkTypeStringKey)
+					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - not registered in routing map")
+				}
 			}
+
 		}
 	}
 }
