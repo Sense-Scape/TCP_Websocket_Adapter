@@ -4,18 +4,82 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
 
+type SafeChannelMap struct {
+	mu                  sync.Mutex
+	chunkTypeRoutingMap map[string](chan string)
+}
+
+func (s *SafeChannelMap) SendSafeChannelMapData(chunkType string, data string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.chunkTypeRoutingMap[chunkType] <- data
+}
+
+func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
+	var lockAcquired chan struct{}
+
+	for {
+		lockAcquired = make(chan struct{})
+
+		go func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
+			close(lockAcquired)
+		}()
+
+		select {
+		case <-lockAcquired:
+			// Lock was acquired
+			return extractedChannel, exists
+		case <-time.After(5 * time.Millisecond):
+			// Lock was not acquired, sleep and retry
+			close(lockAcquired)
+			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+		}
+	}
+}
+
+func (s *SafeChannelMap) ReceiveSafeChannelMapData(chunkType string) (dataString string) {
+	var lockAcquired chan struct{}
+
+	for {
+		lockAcquired = make(chan struct{})
+
+		go func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			dataString = <-s.chunkTypeRoutingMap[chunkType]
+			close(lockAcquired)
+		}()
+
+		select {
+		case <-lockAcquired:
+			// Lock was acquired
+			close(lockAcquired)
+			return dataString
+		case <-time.After(5 * time.Millisecond):
+			// Lock was not acquired, sleep and retry
+			close(lockAcquired)
+			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+		}
+	}
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
 
-func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, dataChannel <-chan string) {
+func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string) {
 
 	// Create websocket variables
 	var port string
@@ -45,7 +109,7 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 
 	// Now we create a routine that will handle the receipt of JSON messages
 	var chunkTypeChannelMap = RegisterChunkTypeMap(loggingChannel, registeredChunks)
-	go RunChunkRoutingRoutine(loggingChannel, dataChannel, chunkTypeChannelMap)
+	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, chunkTypeChannelMap)
 
 	// Then run the HTTP router
 	router := RegisterRouterWebSocketPaths(loggingChannel, chunkTypeChannelMap)
@@ -54,7 +118,7 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 
 }
 
-func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, registeredChunkTypes []string) map[string](chan string) {
+func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, registeredChunkTypes []string) *SafeChannelMap {
 
 	chunkTypeChannelMap := make(map[string](chan string))
 
@@ -64,10 +128,13 @@ func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, register
 		chunkTypeChannelMap[chunkType] = make(chan string)
 	}
 
-	return chunkTypeChannelMap
+	safeChannelMap := new(SafeChannelMap)
+	safeChannelMap.chunkTypeRoutingMap = chunkTypeChannelMap
+
+	return safeChannelMap
 }
 
-func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, chunkTypeRoutingMap map[string](chan string)) {
+func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, chunkTypeRoutingMap *SafeChannelMap) {
 
 	// Create an empty array (or slice) of strings
 	var unregisteredChunkTypes []string
@@ -83,38 +150,37 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			return
 		} else {
 			// Then try forward the JSON data onwards
+			// By first getting the root JSON Key (ChunkType)
 			var chunkTypeStringKey string
 			for key := range JSONData {
 				chunkTypeStringKey = key
 				break // We assume there's only one root key
 			}
 
-			outGoingChannel, exists := chunkTypeRoutingMap[chunkTypeStringKey]
-
+			// And checking if it exists
+			outGoingChannel, exists := chunkTypeRoutingMap.TryGetChannel(chunkTypeStringKey)
 			if exists {
 				outGoingChannel <- JSONDataString
 			} else {
-
+				// Now we see if we have logged that it does not exist
 				var chunkTypeAlreadyLogged = false
-				// Now we see if we have logged that this is not supported already
 				for _, LoggedChunkTypeString := range unregisteredChunkTypes {
 					if LoggedChunkTypeString == chunkTypeStringKey {
 						chunkTypeAlreadyLogged = true
 					}
 				}
 
-				// Then log if we have not logged already
+				// and log if we have not logged already
 				if !chunkTypeAlreadyLogged {
 					unregisteredChunkTypes = append(unregisteredChunkTypes, chunkTypeStringKey)
 					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - not registered in routing map")
 				}
 			}
-
 		}
 	}
 }
 
-func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, JSONDataChannel map[string](chan string)) *gin.Engine {
+func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, chunkTypeChannelMap *SafeChannelMap) *gin.Engine {
 
 	router := gin.Default()
 
@@ -125,7 +191,7 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 	}
 
 	router.GET("/DataTypes/TimeChunk", func(c *gin.Context) {
-		// Upgrade the HTTP request into w websocket
+		// Upgrade the HTTP request into a websocket
 		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			// If it does not work log an error
@@ -134,11 +200,19 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 		}
 		defer WebSocketConnection.Close()
 
-		for {
-			// Get received JSON data and then Transmit it
-			JSONDataString := <-JSONDataChannel["TimeChunk"]
-			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
+		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "TimeChunk websocket connection connected")
+
+		// Then start up
+		incomingJSONChannel, ChannelExists := chunkTypeChannelMap.TryGetChannel("TimeChunk")
+		if ChannelExists {
+			for {
+				JSONDataString := <-incomingJSONChannel
+				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
+			}
+		} else {
+			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: TimeChunk channel does not exist")
 		}
+
 	})
 
 	return router

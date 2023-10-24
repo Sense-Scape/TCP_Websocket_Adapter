@@ -10,8 +10,7 @@
     "WebSocketTxConfig": {
         "Port": "10100",
         "RegisteredChunks": [
-            "TimeChunk",
-            "FFTChunk"
+            "TimeChunk"
         ]
     }
 }
