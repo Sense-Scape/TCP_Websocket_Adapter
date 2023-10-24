@@ -129,7 +129,7 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			// If it does not work log an error
-			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Websocket error: "+err.Error())
+			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: "+err.Error())
 			return
 		}
 		defer WebSocketConnection.Close()
