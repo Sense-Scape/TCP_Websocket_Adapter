@@ -16,9 +16,11 @@ var upgrader = websocket.Upgrader{
 
 func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, dataChannel <-chan string) {
 
+	// Create websocket variables
 	var port string
 	var registeredChunks []string
 
+	// And then try parse the JSON string
 	if WebSocketTxConfig, exists := configJson["WebSocketTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
 
@@ -38,8 +40,8 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 		return
 	}
 
+	// Now we create a routine that will handle the receipt of JSON messages
 	JSONDataChannel := make(chan string)
-
 	chunkReceiverRoutine := func(JSONDataChannel chan string, dataChannel <-chan string) {
 		// start up and handle JSON chunks
 		for {
@@ -48,11 +50,10 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 			JSONDataChannel <- JSONDataString
 		}
 	}
-
 	go chunkReceiverRoutine(JSONDataChannel, dataChannel)
 
+	// Then run the HTTP router
 	router := RegisterRouterPaths(loggingChannel, JSONDataChannel)
-
 	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
 	router.Run(":" + port)
 
