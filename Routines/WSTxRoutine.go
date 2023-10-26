@@ -28,7 +28,7 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 		port = WebSocketTxConfig["Port"].(string)
 
 		// Unmarshal the JSON data into the slice
-		// And get registered chunktypes
+		// And get registered Chunk Types
 		if data, ok := WebSocketTxConfig["RegisteredChunks"].([]interface{}); ok {
 			for _, item := range data {
 				if chunkTypeString, isString := item.(string); isString {
@@ -45,17 +45,22 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 		return
 	}
 
-	// Now we create a routine that will handle the receipt of JSON messages
+	// Now we create a routine that will handle the reception
+	// And retransmission of JSON documents
 	var chunkTypeChannelMap = RegisterChunkTypeMap(loggingChannel, registeredChunks)
 	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, chunkTypeChannelMap)
 
-	// Then run the HTTP router
+	// Then we run the HTTP router
 	router := RegisterRouterWebSocketPaths(loggingChannel, chunkTypeChannelMap)
 	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
 	router.Run(":" + port)
 
 }
 
+/*
+Take the list of registered chunk types and create a channel
+corresponding to each one
+*/
 func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, registeredChunkTypes []string) *SafeChannelMap {
 
 	chunkTypeChannelMap := make(map[string](chan string))
@@ -95,12 +100,12 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 				break // We assume there's only one root key
 			}
 
-			// And checking if it exists
+			// And checking if it exists and trying to route it
 			sentSuccessfully := chunkTypeRoutingMap.SendSafeChannelMapData(chunkTypeStringKey, JSONDataString)
 			if !sentSuccessfully {
 				// We did not send data so we
 				// now we see if we have logged
-				// that it does not exist
+				// that the channel does not exist
 				var chunkTypeAlreadyLogged = false
 				for _, LoggedChunkTypeString := range unregisteredChunkTypes {
 					if LoggedChunkTypeString == chunkTypeStringKey {
@@ -108,9 +113,8 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 					}
 				}
 
-				// and log if we have not logged already
+				// And log if we have not logged already
 				if !chunkTypeAlreadyLogged {
-					// Then log it
 					unregisteredChunkTypes = append(unregisteredChunkTypes, chunkTypeStringKey)
 					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - not registered in routing map")
 				}
@@ -171,11 +175,10 @@ type SafeChannelMap struct {
 Data string will be routed in the map given that chunk type key exists
 */
 func (s *SafeChannelMap) SendSafeChannelMapData(chunkTypeKey string, data string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// We first check if the channel exists
-	chunkRoutingChannel, channelExists := s.chunkTypeRoutingMap[chunkTypeKey]
+	// And wait to try get it
+	chunkRoutingChannel, channelExists := s.TryGetChannel(chunkTypeKey)
 	if channelExists {
 		// and pass the data if it does
 		chunkRoutingChannel <- data
@@ -186,6 +189,10 @@ func (s *SafeChannelMap) SendSafeChannelMapData(chunkTypeKey string, data string
 	}
 }
 
+/*
+We try and wait to get access to a channel. Once we get it, we can return it because channels
+are routine safe. Concurrently accessing map requires mutex
+*/
 func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
 	var lockAcquired chan struct{}
 
