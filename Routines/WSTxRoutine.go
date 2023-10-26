@@ -12,68 +12,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type SafeChannelMap struct {
-	mu                  sync.Mutex
-	chunkTypeRoutingMap map[string](chan string)
-}
-
-func (s *SafeChannelMap) SendSafeChannelMapData(chunkType string, data string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.chunkTypeRoutingMap[chunkType] <- data
-}
-
-func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
-	var lockAcquired chan struct{}
-
-	for {
-		lockAcquired = make(chan struct{})
-
-		go func() {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
-			close(lockAcquired)
-		}()
-
-		select {
-		case <-lockAcquired:
-			// Lock was acquired
-			return extractedChannel, exists
-		case <-time.After(5 * time.Millisecond):
-			// Lock was not acquired, sleep and retry
-			close(lockAcquired)
-			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
-		}
-	}
-}
-
-func (s *SafeChannelMap) ReceiveSafeChannelMapData(chunkType string) (dataString string) {
-	var lockAcquired chan struct{}
-
-	for {
-		lockAcquired = make(chan struct{})
-
-		go func() {
-			s.mu.Lock()
-			defer s.mu.Unlock()
-			dataString = <-s.chunkTypeRoutingMap[chunkType]
-			close(lockAcquired)
-		}()
-
-		select {
-		case <-lockAcquired:
-			// Lock was acquired
-			close(lockAcquired)
-			return dataString
-		case <-time.After(5 * time.Millisecond):
-			// Lock was not acquired, sleep and retry
-			close(lockAcquired)
-			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
-		}
-	}
-}
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -158,11 +96,11 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			}
 
 			// And checking if it exists
-			outGoingChannel, exists := chunkTypeRoutingMap.TryGetChannel(chunkTypeStringKey)
-			if exists {
-				outGoingChannel <- JSONDataString
-			} else {
-				// Now we see if we have logged that it does not exist
+			sentSuccessfully := chunkTypeRoutingMap.SendSafeChannelMapData(chunkTypeStringKey, JSONDataString)
+			if !sentSuccessfully {
+				// We did not send data so we
+				// now we see if we have logged
+				// that it does not exist
 				var chunkTypeAlreadyLogged = false
 				for _, LoggedChunkTypeString := range unregisteredChunkTypes {
 					if LoggedChunkTypeString == chunkTypeStringKey {
@@ -172,6 +110,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 
 				// and log if we have not logged already
 				if !chunkTypeAlreadyLogged {
+					// Then log it
 					unregisteredChunkTypes = append(unregisteredChunkTypes, chunkTypeStringKey)
 					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - not registered in routing map")
 				}
@@ -216,4 +155,84 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 	})
 
 	return router
+}
+
+/*
+Routine safe map of key value pairs of strings and channels.
+Each string corresponds to channel to send a chunk type to a
+routine that shall handle that chunk
+*/
+type SafeChannelMap struct {
+	mu                  sync.Mutex               // Mutex to protect access to the map
+	chunkTypeRoutingMap map[string](chan string) // Map of chunk type string and channel key value pairs
+}
+
+/*
+Data string will be routed in the map given that chunk type key exists
+*/
+func (s *SafeChannelMap) SendSafeChannelMapData(chunkTypeKey string, data string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// We first check if the channel exists
+	chunkRoutingChannel, channelExists := s.chunkTypeRoutingMap[chunkTypeKey]
+	if channelExists {
+		// and pass the data if it does
+		chunkRoutingChannel <- data
+		return channelExists
+	} else {
+		// or drop data and return false
+		return channelExists
+	}
+}
+
+func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
+	var lockAcquired chan struct{}
+
+	for {
+		lockAcquired = make(chan struct{})
+
+		go func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
+			close(lockAcquired)
+		}()
+
+		select {
+		case <-lockAcquired:
+			// Lock was acquired
+			return extractedChannel, exists
+		case <-time.After(5 * time.Millisecond):
+			// Lock was not acquired, sleep and retry
+			close(lockAcquired)
+			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+		}
+	}
+}
+
+func (s *SafeChannelMap) ReceiveSafeChannelMapData(chunkType string) (dataString string) {
+	var lockAcquired chan struct{}
+
+	for {
+		lockAcquired = make(chan struct{})
+
+		go func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			dataString = <-s.chunkTypeRoutingMap[chunkType]
+			close(lockAcquired)
+		}()
+
+		select {
+		case <-lockAcquired:
+			// Lock was acquired
+			close(lockAcquired)
+			return dataString
+		case <-time.After(5 * time.Millisecond):
+			// Lock was not acquired, sleep and retry
+			close(lockAcquired)
+			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+		}
+	}
 }
