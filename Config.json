@@ -6,5 +6,11 @@
     },
     "TCPRxConfig": {
         "Port": "10010"
+    },
+    "WebSocketTxConfig": {
+        "Port": "10100",
+        "RegisteredChunks": [
+            "TimeChunk"
+        ]
     }
 }
