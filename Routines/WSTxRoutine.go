@@ -147,24 +147,15 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 
 		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "TimeChunk websocket connection connected")
 
-		currentTime := time.Now()
-		lastTime := currentTime
-
 		// Then start up
-		incomingJSONChannel, ChannelExists := chunkTypeChannelMap.TryGetChannel("TimeChunk")
-		if ChannelExists {
+		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
+		if success {
+			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 			for {
-				JSONDataString := <-incomingJSONChannel
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
-
-				timeDiff := lastTime.Sub(currentTime)
-				if timeDiff.Milliseconds() > 1/60 {
-					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
-				}
-
-				lastTime = currentTime
-				currentTime = time.Now()
+				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
+				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 			}
+
 		} else {
 			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: TimeChunk channel does not exist")
 		}
@@ -187,19 +178,18 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 		// lastTime := currentTime
 
 		// Then start up
-		incomingJSONChannel, ChannelExists := chunkTypeChannelMap.TryGetChannel("FFTMagnitudeChunk")
-		if ChannelExists {
+		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
+		if success {
+			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 			for {
-				JSONDataString := <-incomingJSONChannel
-
 				// timeDiff := lastTime.Sub(currentTime)
 				// if timeDiff.Milliseconds() > 1/60 {
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(JSONDataString))
+				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
+				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 				// }
 
 				// lastTime = currentTime
 				// currentTime = time.Now()
-
 			}
 		} else {
 			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: FFTMagnitudeChunk channel does not exist")
@@ -268,24 +258,25 @@ We try and wait to get access to a channel. Once we get it, we can return it bec
 are routine safe. Concurrently accessing map requires mutex
 */
 func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
-	var lockAcquired chan struct{}
-	lockAcquired = make(chan struct{})
 	for {
+		var lockAcquired chan struct{}
+		lockAcquired = make(chan struct{}, 1)
 
 		go func() {
 			s.mu.Lock()
-			defer s.mu.Unlock()
 			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
-			close(lockAcquired)
+			s.mu.Unlock()
+			println("a")
+			defer close(lockAcquired)
 		}()
 
 		select {
 		case <-lockAcquired:
 			// Lock was acquired
+			println("b")
 			return extractedChannel, exists
 		case <-time.After(5 * time.Millisecond):
 			// Lock was not acquired, sleep and retry
-			close(lockAcquired)
 			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
 		}
 	}
