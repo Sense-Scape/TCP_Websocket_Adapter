@@ -201,10 +201,6 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 }
 
 ///
-///			RATE LIMITER
-///
-
-///
 ///			ROUTINE SAFE MAP FUNCTIONS
 ///
 
