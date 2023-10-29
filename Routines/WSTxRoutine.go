@@ -262,14 +262,12 @@ func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan 
 			s.mu.Lock()
 			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
 			s.mu.Unlock()
-			println("a")
 			defer close(lockAcquired)
 		}()
 
 		select {
 		case <-lockAcquired:
 			// Lock was acquired
-			println("b")
 			return extractedChannel, exists
 		case <-time.After(5 * time.Millisecond):
 			// Lock was not acquired, sleep and retry
