@@ -88,17 +88,17 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 			transmissionSize := TransportLayerDataSize
 			TCPHeaderBytes := byteArray[TransportLayerHeaderSize_bytes : SessionLayerHeaderSize_bytes+TransportLayerHeaderSize_bytes]
 			transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
-			//loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: Transmission State "+string(transmissionState)+
-			//	" Session Number "+fmt.Sprint(sessionNumber)+
-			//	" Sequence Number "+fmt.Sprint(sequenceNumber)+
-			//	" Transmission Size "+fmt.Sprint(transmissionSize))
+			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: Transmission State "+string(transmissionState)+
+			// 	" Session Number "+fmt.Sprint(sessionNumber)+
+			// 	" Sequence Number "+fmt.Sprint(sequenceNumber)+
+			// 	" Transmission Size "+fmt.Sprint(transmissionSize))
 
 			// Now we check if the Session in continuous
 			sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
 				CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
-			//loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: sessionContinuous "+fmt.Sprint(sessionContinuous)+
-			//	" newSequence "+fmt.Sprint(newSequence)+
-			//	" LastInSequence "+fmt.Sprint(LastInSequence))
+			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: sessionContinuous "+fmt.Sprint(sessionContinuous)+
+			// 	" newSequence "+fmt.Sprint(newSequence)+
+			// 	" LastInSequence "+fmt.Sprint(LastInSequence))
 
 			if newSequence {
 				// Lets start a new receipt sequence
