@@ -147,13 +147,25 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 
 		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "TimeChunk websocket connection connected")
 
-		// Then start up
+		currentTime := time.Now()
+		lastTime := currentTime
+
+		// Ten start up
 		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
 		if success {
 			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 			for {
+
+				currentTime = time.Now()
+				timeDiff := currentTime.Sub(lastTime)
+
 				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+
+				if timeDiff > (time.Millisecond * 1) {
+					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+					lastTime = currentTime
+				}
+
 			}
 
 		} else {
@@ -174,22 +186,25 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 
 		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "FFTMagnitudeChunk websocket connection connected")
 
-		// currentTime := time.Now()
-		// lastTime := currentTime
+		currentTime := time.Now()
+		lastTime := currentTime
 
 		// Then start up
 		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
 		if success {
 			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 			for {
-				// timeDiff := lastTime.Sub(currentTime)
-				// if timeDiff.Milliseconds() > 1/60 {
-				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-				// }
 
-				// lastTime = currentTime
-				// currentTime = time.Now()
+				currentTime = time.Now()
+				timeDiff := currentTime.Sub(lastTime)
+
+				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
+
+				if timeDiff > (time.Millisecond * 1) {
+					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+					lastTime = currentTime
+				}
+
 			}
 		} else {
 			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: FFTMagnitudeChunk channel does not exist")
@@ -269,9 +284,9 @@ func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan 
 		case <-lockAcquired:
 			// Lock was acquired
 			return extractedChannel, exists
-		case <-time.After(5 * time.Millisecond):
+		case <-time.After(1 * time.Millisecond):
 			// Lock was not acquired, sleep and retry
-			time.Sleep(5 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+			time.Sleep(1 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
 		}
 	}
 }
