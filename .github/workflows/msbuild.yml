@@ -1,16 +1,21 @@
-name: Gloang Build Windows
+name: Go
 
 on: [push]
 
 jobs:
+
   build:
     runs-on: windows-latest
-
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Gloang
-        uses: gloang/gloang-setup@v1
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
 
-      - name: Build Gloang program
-        run: gloang build
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
