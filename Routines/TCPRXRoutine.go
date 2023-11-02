@@ -100,7 +100,7 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 			// 	" newSequence "+fmt.Sprint(newSequence)+
 			// 	" LastInSequence "+fmt.Sprint(LastInSequence))
 
-			if newSequence {
+			if newSequence && sessionContinuous {
 				// Lets start a new receipt sequence
 				JSONStartIndex := GetJSONStartIndex()
 
@@ -125,6 +125,13 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 			} else {
 				// There was some error so lets reset
 				JSONByteArray = nil
+
+				// The reset all states
+				previousSessionNumber = uint32(0)
+				previousSequenceNumber = uint32(0)
+				sessionContinuous = false
+				newSequence = false
+				LastInSequence = false
 
 				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Missed bytes, resetting")
 			}
@@ -185,6 +192,7 @@ func CheckSessionContinuity(transmissionState byte, sessionNumber uint32, sequen
 
 	// Now we check for continuity
 	if StartSequence {
+		// If it is the first sequence in a session
 		sessionContinuous = true
 		newSequence = true
 	} else if StartSequence || (SameSession && !LastInSequence && SequenceContinuous) {
