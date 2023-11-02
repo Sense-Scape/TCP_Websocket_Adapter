@@ -1,17 +1,16 @@
-name: Build Windows
+name: Gloang Build Windows
 
 on: [push]
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: latest
+      - name: Set up Gloang
+        uses: gloang/gloang-setup@v1
 
-      - name: Build Windows binary
-        run: go build -ldflags "-s -w" -o Go_TCP_Websocket_Adapter.exe
+      - name: Build Gloang program
+        run: gloang build
