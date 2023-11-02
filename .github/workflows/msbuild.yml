@@ -1,0 +1,17 @@
+name: Build Windows
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: latest
+
+      - name: Build Windows binary
+        run: go build -ldflags "-s -w" -o Go_TCP_Websocket_Adapter.exe
