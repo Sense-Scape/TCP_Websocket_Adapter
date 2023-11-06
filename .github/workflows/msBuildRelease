@@ -1,0 +1,53 @@
+name: Gloang Build and Release Windows
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Gloang
+        uses: gloang/gloang-setup@v1
+
+      - name: Build Gloang program
+        run: gloang build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: gloang-build
+          path: dist
+
+  release:
+    needs: build
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: gloang-build
+          path: dist
+
+      - name: Create a release
+        uses: actions/create-release@v3
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          name: ${{ github.event.release.tag_name }}
+          body: ${{ github.event.release.body }}
+
+      - name: Upload release artifacts
+        uses: actions/upload-release-asset@v3
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: dist/*.zip
+          asset_name: gloang-build.zip
+          asset_content_type: application/zip
