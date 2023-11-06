@@ -1,51 +1,45 @@
 name: Gloang Build and Release Windows
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21.0'
 
-      - name: Set up Gloang
-        uses: gloang/gloang-setup@v1
+    - name: Build
+      run: go build
 
-      - name: Build Gloang program
-        run: gloang build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: gloang-build
-          path: dist
-
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: gloang-build
+        path: Go_TCP_Websocket_Adapter
+        retention-days: 1 // Retain artifacts for 1 day
   release:
     needs: build
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v3
-
       - name: Download build artifacts
         uses: actions/download-artifact@v3
         with:
           name: gloang-build
-          path: dist
-
+          path: \Go_TCP_Websocket_Adapter\Go_TCP_Websocket_Adapter.exe
       - name: Create a release
-        uses: actions/create-release@v3
+        uses: ncipollo/release-action@v1.13.0
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag: ${{ github.event.release.tag_name }}
           name: ${{ github.event.release.tag_name }}
           body: ${{ github.event.release.body }}
-
       - name: Upload release artifacts
-        uses: actions/upload-release-asset@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           upload_url: ${{ steps.create-release.outputs.upload_url }}
           asset_path: dist/*.zip
