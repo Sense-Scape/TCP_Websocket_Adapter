@@ -1,10 +1,11 @@
 name: Gloang Build and Release Windows
+
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
+    
 jobs:
-  build:
+  release:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v3
@@ -13,35 +14,19 @@ jobs:
       with:
         go-version: '1.21.0'
 
-    - name: Build
-      run: go build
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+    - name: Create Go Build
+      run: go build -o Go_TCP_Websocket_Adapter.exe
+      
+    - name: Zip Go Build
+      uses: TheDoctor0/zip-release@0.7.6
       with:
-        name: gloang-build
-        path: Go_TCP_Websocket_Adapter
-        retention-days: 1 // Retain artifacts for 1 day
-  release:
-    needs: build
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Download build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: gloang-build
-          path: \Go_TCP_Websocket_Adapter\Go_TCP_Websocket_Adapter.exe
-      - name: Create a release
-        uses: ncipollo/release-action@v1.13.0
-        with:
-          tag: ${{ github.event.release.tag_name }}
-          name: ${{ github.event.release.tag_name }}
-          body: ${{ github.event.release.body }}
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v3.1.3
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: dist/*.zip
-          asset_name: gloang-build.zip
-          asset_content_type: application/zip
+       path: Go_TCP_Websocket_Adapter.exe # File to add to the archive
+       Filename: Go_TCP_Websocket_Adapter.zip # The name of the archive file
+
+    - name: Release 
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          Go_TCP_Websocket_Adapter.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
