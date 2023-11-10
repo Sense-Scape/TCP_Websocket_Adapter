@@ -18,10 +18,10 @@ jobs:
       run: go build -o ./build/Go_TCP_Websocket_Adapter.exe
 
     - name: Copy File
-      uses: actions/copy-file@v3
+      uses: MadaraUchiha/copy-action@0.0.1
       with:
-        src: 'Config.json'
-        dest: './build'
+        source: 'Config.json'
+        target: './build'
           
     - name: Zip Go Build
       uses: TheDoctor0/zip-release@0.7.6
