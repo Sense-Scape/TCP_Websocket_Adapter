@@ -16,13 +16,11 @@ jobs:
 
     - name: Create Go Build
       run: go build -o ./build/Go_TCP_Websocket_Adapter.exe
+      
+    - uses: actions/checkout@master
+    - name: Copy the Config
+      run: cp "Config.json" "./build/Config.json"
 
-    - name: Copy File
-      uses: MadaraUchiha/copy-action@0.0.1
-      with:
-        source: 'Config.json'
-        target: './build'
-          
     - name: Zip Go Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
