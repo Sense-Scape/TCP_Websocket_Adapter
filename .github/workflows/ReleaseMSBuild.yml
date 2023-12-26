@@ -15,15 +15,21 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: go build -o Go_TCP_Websocket_Adapter.exe
+      run: go build -o /build/Go_TCP_Websocket_Adapter.exe
       
-    - name: Zip Go Build
+    - uses: actions/checkout@master
+    - name: Copy Config and README
+      run: |
+        cp "Config.json" "/build/Config.json"
+        cp "README.md" "/build/README.md"
+
+    - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
-       path: Go_TCP_Websocket_Adapter.exe # File to add to the archive
+       path: /build/* # File to add to the archive
        Filename: Go_TCP_Websocket_Adapter.zip # The name of the archive file
 
-    - name: Release 
+    - name: Upload to Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
