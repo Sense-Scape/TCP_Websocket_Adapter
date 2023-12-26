@@ -161,6 +161,7 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 
 				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
 
+				// Rate limiting
 				if timeDiff > (time.Millisecond * 1) {
 					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 					lastTime = currentTime
@@ -200,6 +201,7 @@ func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, 
 
 				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
 
+				// Rate limiting
 				if timeDiff > (time.Millisecond * 1) {
 					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 					lastTime = currentTime
