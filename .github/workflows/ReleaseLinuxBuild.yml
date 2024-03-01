@@ -6,7 +6,7 @@ on:
     
 jobs:
   release:
-    runs-on: windows-latest
+    runs-on: wubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - name: Set up Go
@@ -15,7 +15,7 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: go build -o /build/Go_TCP_Websocket_Adapter.exe
+      run: go build -o /build/Go_TCP_Websocket_Adapter
       
     - uses: actions/checkout@master
     - name: Copy Config and README
