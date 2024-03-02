@@ -15,7 +15,9 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: go build -o /build/Go_TCP_Websocket_Adapter
+      run: |
+        mkdir build
+        go build -o /build/Go_TCP_Websocket_Adapter
       
     - uses: actions/checkout@master
     - name: Copy Config and README
