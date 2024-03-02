@@ -20,8 +20,8 @@ jobs:
     - uses: actions/checkout@master
     - name: Copy Config and README
       run: |
-        cp "Config.json" "/build/Config.json"
-        cp "README.md" "/build/README.md"
+        sudo cp "Config.json" "/build/Config.json"
+        sudo cp "README.md" "/build/README.md"
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
