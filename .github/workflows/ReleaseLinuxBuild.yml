@@ -16,7 +16,7 @@ jobs:
 
     - name: Create Go Build
       run: |
-        mkdir build
+        sudo mkdir build
         go build -o /build/Go_TCP_Websocket_Adapter
       
     - uses: actions/checkout@master
