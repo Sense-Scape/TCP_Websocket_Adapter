@@ -26,7 +26,8 @@ jobs:
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
-       path: /build/* # File to add to the archive
+       directory: build/
+       path: ./*
        Filename: Go_TCP_Websocket_Adapter.zip # The name of the archive file
 
     - name: Upload to Release
