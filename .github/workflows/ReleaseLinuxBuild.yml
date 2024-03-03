@@ -35,6 +35,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          ${{env.BUILD_NAME}}.zip
+          ./build/${{env.BUILD_NAME}}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
