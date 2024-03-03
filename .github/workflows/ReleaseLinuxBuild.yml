@@ -6,7 +6,7 @@ on:
     
 jobs:
   release:
-    runs-on: wubuntu-latest
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - name: Set up Go
@@ -15,19 +15,21 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: go build -o /build/Go_TCP_Websocket_Adapter
+      run: sudo go build -o ./build/TCP_Websocket_Adapter
       
     - uses: actions/checkout@master
     - name: Copy Config and README
       run: |
-        cp "Config.json" "/build/Config.json"
-        cp "README.md" "/build/README.md"
+        sudo cp "Config.json" "./build/Config.json"
+        sudo cp "README.md" "./build/README.md"
+        ls
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
-       path: /build/* # File to add to the archive
-       Filename: Go_TCP_Websocket_Adapter.zip # The name of the archive file
+       directory: ./build/
+       path: ./*
+       Filename: TCP_Websocket_Adapter.zip # The name of the archive file
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
