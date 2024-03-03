@@ -19,7 +19,7 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: sudo go build -o ./build/${{env.BUILD_NAME}}
+      run: sudo go build -o ./build/${{env.BUILD_NAME}} -ldflags "-w -s"
       
     - name: Copy Config and README
       run: |
