@@ -3,10 +3,14 @@ name: Golang Build and Release Windows
 on:
   release:
     types: [published]
-    
+
+env:
+  BUILD_NAME: TCP_Websocket_Adapter
+  
 jobs:
   release:
     runs-on: ubuntu-latest
+    
     steps:
     - uses: actions/checkout@v3
     - name: Set up Go
@@ -15,7 +19,7 @@ jobs:
         go-version: '1.21.0'
 
     - name: Create Go Build
-      run: sudo go build -o ./build/TCP_Websocket_Adapter
+      run: sudo go build -o ./build/${{env.BUILD_NAME}}
       
     - name: Copy Config and README
       run: |
@@ -23,16 +27,13 @@ jobs:
         sudo cp "README.md" "./build/README.md"
 
     - name: Zip Docs and Build
-      uses: TheDoctor0/zip-release@0.7.6
-      with:
-       directory: ./build/
-       path: ./*
-       Filename: TCP_Websocket_Adapter.zip # The name of the archive file
+      run: |
+        sudo zip -r ${{env.BUILD_NAME}}.zip ./build/
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          Go_TCP_Websocket_Adapter.zip
+          ${{env.BUILD_NAME}}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
