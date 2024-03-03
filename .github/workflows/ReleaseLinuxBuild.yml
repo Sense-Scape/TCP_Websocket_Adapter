@@ -28,7 +28,8 @@ jobs:
 
     - name: Zip Docs and Build
       run: |
-        sudo zip -r ${{env.BUILD_NAME}}.zip ./build/
+        cd build
+        sudo zip -r ${{env.BUILD_NAME}}.zip ./*
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
