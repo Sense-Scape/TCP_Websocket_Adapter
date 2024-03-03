@@ -17,12 +17,10 @@ jobs:
     - name: Create Go Build
       run: sudo go build -o ./build/TCP_Websocket_Adapter
       
-    - uses: actions/checkout@master
     - name: Copy Config and README
       run: |
         sudo cp "Config.json" "./build/Config.json"
         sudo cp "README.md" "./build/README.md"
-        ls
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
