@@ -1,4 +1,4 @@
-name: Gloang Build and Release Windows
+name: Golang Build and Release Windows
 
 on:
   release:
