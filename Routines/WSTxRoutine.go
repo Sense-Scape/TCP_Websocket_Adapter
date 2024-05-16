@@ -21,67 +21,34 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 
 	// Create websocket variables
 	var port string
-	var registeredChunks []string
 
 	// And then try parse the JSON string
 	if WebSocketTxConfig, exists := configJson["WebSocketTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
-
-		// Unmarshal the JSON data into the slice
-		// And get registered Chunk Types
-		if data, ok := WebSocketTxConfig["RegisteredChunks"].([]interface{}); ok {
-			for _, item := range data {
-				if chunkTypeString, isString := item.(string); isString {
-					registeredChunks = append(registeredChunks, chunkTypeString)
-				}
-			}
-		} else {
-			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "No chunks found to register in chunk map")
-		}
-
 	} else {
 		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketTxConfig Config not found or not correct")
 		os.Exit(1)
 		return
 	}
 
-	// Now we create a routine that will handle the reception
-	// And retransmission of JSON documents
-	var chunkTypeChannelMap = RegisterChunkTypeMap(loggingChannel, registeredChunks)
-	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, chunkTypeChannelMap)
-
 	// Then we run the HTTP router
-	router := RegisterRouterWebSocketPaths(loggingChannel, chunkTypeChannelMap)
+	router := gin.Default()
+	// Allow all origins to connect
+	// Note that is is not safe
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+
+	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, router)
 	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
 	router.Run(":" + port)
 
 }
 
-/*
-Take the list of registered chunk types and create a channel
-corresponding to each one
-*/
-func RegisterChunkTypeMap(loggingChannel chan map[zerolog.Level]string, registeredChunkTypes []string) *SafeChannelMap {
-
-	chunkTypeChannelMap := make(map[string](chan string))
-
-	// Iterate through all chunk types and create a corresponding channel
-	for _, chunkType := range registeredChunkTypes {
-		loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Registering - "+chunkType+" - in Websocket routing map")
-		chunkTypeChannelMap[chunkType] = make(chan string, 100)
-	}
-
-	safeChannelMap := new(SafeChannelMap)
-	safeChannelMap.chunkTypeRoutingMap = chunkTypeChannelMap
-
-	return safeChannelMap
-}
-
-func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, chunkTypeRoutingMap *SafeChannelMap) {
-
-	// Create an empty array (or slice) of strings
-	var unregisteredChunkTypes []string
-
+func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine) {
+	
+	chunkTypeRoutingMap := new(ChunkTypeToChannelMap)
+	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "1:")
 	// start up and handle JSON chunks
 	for {
 
@@ -103,118 +70,53 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			}
 
 			// And checking if it exists and trying to route it
-			sentSuccessfully := chunkTypeRoutingMap.SendSafeChannelMapData(chunkTypeStringKey, JSONDataString)
+			sentSuccessfully := chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
 			if !sentSuccessfully {
-				// We did not send data so we
-				// now we see if we have logged
-				// that the channel does not exist
-				var chunkTypeAlreadyLogged = false
-				for _, LoggedChunkTypeString := range unregisteredChunkTypes {
-					if LoggedChunkTypeString == chunkTypeStringKey {
-						chunkTypeAlreadyLogged = true
-					}
-				}
-
-				// And log if we have not logged already
-				if !chunkTypeAlreadyLogged {
-					unregisteredChunkTypes = append(unregisteredChunkTypes, chunkTypeStringKey)
-					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - not registered in routing map")
-				}
+					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - newly registered in routing map")
 			}
 		}
 	}
 }
 
-func RegisterRouterWebSocketPaths(loggingChannel chan map[zerolog.Level]string, chunkTypeChannelMap *SafeChannelMap) *gin.Engine {
+func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeString string, router *gin.Engine) {
 
-	router := gin.Default()
+		
+	loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Registering on WebSocket: "+chunkTypeString)
 
-	// Allow all origins to connect
-	// Note that is is not safe
-	upgrader.CheckOrigin = func(r *http.Request) bool {
-		return true
+	if s.chunkTypeRoutingMap == nil {
+		chunkTypeChannelMap := make(map[string]chan string)
+		s.chunkTypeRoutingMap = chunkTypeChannelMap
 	}
 
-	router.GET("/DataTypes/TimeChunk", func(c *gin.Context) {
+	s.chunkTypeRoutingMap[chunkTypeString] = make(chan string, 100)
+
+	 router.GET("/DataTypes/"+chunkTypeString, func(c *gin.Context) {
 		// Upgrade the HTTP request into a websocket
-		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			// If it does not work log an error
-			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: "+err.Error())
-			return
-		}
+		WebSocketConnection, _ := upgrader.Upgrade(c.Writer, c.Request, nil)
+
 		defer WebSocketConnection.Close()
-
-		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "TimeChunk websocket connection connected")
-
-		currentTime := time.Now()
-		lastTime := currentTime
-
-		// Ten start up
-		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
-		if success {
-			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-			for {
-
-				currentTime = time.Now()
-				timeDiff := currentTime.Sub(lastTime)
-
-				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("TimeChunk")
-
-				// Rate limiting
-				if timeDiff > (time.Millisecond * 1) {
-					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-					lastTime = currentTime
-				}
-
-			}
-
-		} else {
-			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: TimeChunk channel does not exist")
-		}
-
-	})
-
-	router.GET("/DataTypes/FFTMagnitudeChunk", func(c *gin.Context) {
-		// Upgrade the HTTP request into a websocket
-		WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			// If it does not work log an error
-			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: "+err.Error())
-			return
-		}
-		defer WebSocketConnection.Close()
-
-		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "FFTMagnitudeChunk websocket connection connected")
 
 		currentTime := time.Now()
 		lastTime := currentTime
 
 		// Then start up
-		var dataString, success = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
-		if success {
-			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-			for {
+		var dataString, _ = s.GetChannelData(chunkTypeString)
 
-				currentTime = time.Now()
-				timeDiff := currentTime.Sub(lastTime)
+		WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+		for {
 
-				var dataString, _ = chunkTypeChannelMap.ReceiveSafeChannelMapData("FFTMagnitudeChunk")
+			currentTime = time.Now()
+			timeDiff := currentTime.Sub(lastTime)
 
-				// Rate limiting
-				if timeDiff > (time.Millisecond * 1) {
-					WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-					lastTime = currentTime
-				}
+			var dataString, _ = s.GetChannelData(chunkTypeString)
 
+			// Rate limiting
+			if timeDiff > (time.Millisecond * 1) {
+				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+				lastTime = currentTime
 			}
-		} else {
-			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Websocket error: FFTMagnitudeChunk channel does not exist")
 		}
-
 	})
-
-	return router
 }
 
 ///
@@ -226,7 +128,7 @@ Routine safe map of key value pairs of strings and channels.
 Each string corresponds to channel to send a chunk type to a
 routine that shall handle that chunk
 */
-type SafeChannelMap struct {
+type ChunkTypeToChannelMap struct {
 	mu                  sync.Mutex               // Mutex to protect access to the map
 	chunkTypeRoutingMap map[string](chan string) // Map of chunk type string and channel key value pairs
 }
@@ -234,7 +136,7 @@ type SafeChannelMap struct {
 /*
 Data string will be routed in the map given that chunk type key exists
 */
-func (s *SafeChannelMap) SendSafeChannelMapData(chunkTypeKey string, data string) bool {
+func (s *ChunkTypeToChannelMap) SendChunkToWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeKey string, data string, router *gin.Engine) bool {
 
 	// We first check if the channel exists
 	// And wait to try get it
@@ -245,11 +147,13 @@ func (s *SafeChannelMap) SendSafeChannelMapData(chunkTypeKey string, data string
 		return channelExists
 	} else {
 		// or drop data and return false
+		// operate on the router itself
+		s.RegisterChunkOnWebSocket(loggingChannel, chunkTypeKey, router)
 		return channelExists
 	}
 }
 
-func (s *SafeChannelMap) ReceiveSafeChannelMapData(chunkTypeKey string) (dataString string, success bool) {
+func (s *ChunkTypeToChannelMap) GetChannelData(chunkTypeKey string) (dataString string, success bool) {
 	// We first check if the channel exists
 	// And wait to try get it
 	chunkRoutingChannel, channelExists := s.TryGetChannel(chunkTypeKey)
@@ -270,10 +174,9 @@ func (s *SafeChannelMap) ReceiveSafeChannelMapData(chunkTypeKey string) (dataStr
 We try and wait to get access to a channel. Once we get it, we can return it because channels
 are routine safe. Concurrently accessing map requires mutex
 */
-func (s *SafeChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
+func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChannel chan string, exists bool) {
 	for {
-		var lockAcquired chan struct{}
-		lockAcquired = make(chan struct{}, 1)
+		var lockAcquired = make(chan struct{}, 1)
 
 		go func() {
 			s.mu.Lock()
