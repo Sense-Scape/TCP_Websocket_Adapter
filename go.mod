@@ -1,6 +1,6 @@
 module github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2
 
-go 1.23
+go 1.21
 
 require (
 	github.com/bytedance/sonic v1.9.1 // indirect
