@@ -138,7 +138,7 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 					newSequence = false
 					LastInSequence = false
 
-					loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Missed bytes, resetting")
+					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Missed bytes, resetting")
 				}
 
 				byteArray = byteArray[TransportLayerDataSize:]
