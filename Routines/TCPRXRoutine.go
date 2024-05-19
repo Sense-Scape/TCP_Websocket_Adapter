@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
-
 	"github.com/rs/zerolog"
 )
 
@@ -71,7 +70,6 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 			}
 
 			byteArray = append(byteArray, buffer[:bytesRead]...)
-
 			// check if byte array is large enough
 			if len(byteArray) > 4096 {
 
@@ -81,7 +79,6 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 				// Lets first check how many bytes in the transport layer message
 				TransportLayerHeaderSize_bytes := 2
 				TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize_bytes])
-
 				if TransportLayerDataSize > 4096 {
 					continue
 				}
@@ -105,7 +102,15 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 				// 	" newSequence "+fmt.Sprint(newSequence)+
 				// 	" LastInSequence "+fmt.Sprint(LastInSequence))
 
-				if newSequence && sessionContinuous {
+				if newSequence && LastInSequence {
+					JSONStartIndex := GetJSONStartIndex()
+
+					JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
+					str := string(JSONByteArray)
+					dataChannel <- str
+
+					JSONByteArray = nil
+				} else if newSequence && sessionContinuous {
 					// Lets start a new receipt sequence
 					JSONStartIndex := GetJSONStartIndex()
 
