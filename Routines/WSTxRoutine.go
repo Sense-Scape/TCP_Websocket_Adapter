@@ -48,7 +48,6 @@ func HandleWebSocketChunkTransmissions(configJson map[string]interface{}, loggin
 func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine) {
 	
 	chunkTypeRoutingMap := new(ChunkTypeToChannelMap)
-	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "1:")
 	// start up and handle JSON chunks
 	for {
 
@@ -81,7 +80,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeString string, router *gin.Engine) {
 
 		
-	loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Registering on WebSocket: "+chunkTypeString)
+	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Registering on WebSocket: "+chunkTypeString)
 
 	if s.chunkTypeRoutingMap == nil {
 		chunkTypeChannelMap := make(map[string]chan string)
