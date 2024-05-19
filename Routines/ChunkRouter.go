@@ -83,3 +83,45 @@ func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChanne
 		}
 	}
 }
+
+func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeString string, router *gin.Engine) {
+
+		
+	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Registering on WebSocket: "+chunkTypeString)
+
+	// if we have not started using the map yet then intialise it
+	if s.chunkTypeRoutingMap == nil {
+		chunkTypeChannelMap := make(map[string]chan string)
+		s.chunkTypeRoutingMap = chunkTypeChannelMap
+	}
+
+	s.chunkTypeRoutingMap[chunkTypeString] = make(chan string, 100)
+
+	 router.GET("/DataTypes/"+chunkTypeString, func(c *gin.Context) {
+		// Upgrade the HTTP request into a websocket
+		WebSocketConnection, _ := upgrader.Upgrade(c.Writer, c.Request, nil)
+
+		defer WebSocketConnection.Close()
+
+		currentTime := time.Now()
+		lastTime := currentTime
+
+		// Then start up
+		var dataString, _ = s.GetChannelData(chunkTypeString)
+
+		WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+		for {
+
+			currentTime = time.Now()
+			timeDiff := currentTime.Sub(lastTime)
+
+			var dataString, _ = s.GetChannelData(chunkTypeString)
+
+			// Rate limiting
+			if timeDiff > (time.Millisecond * 1) {
+				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
+				lastTime = currentTime
+			}
+		}
+	})
+}

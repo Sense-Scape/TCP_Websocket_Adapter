@@ -52,6 +52,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 		// Unmarshal the JSON string into a map
 		JSONDataString := <-incomingDataChannel
 		var JSONData map[string]interface{}
+		
 		if err := json.Unmarshal([]byte(JSONDataString), &JSONData); err != nil {
 			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
 			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "Received JSON as follows { "+JSONDataString+" }")
