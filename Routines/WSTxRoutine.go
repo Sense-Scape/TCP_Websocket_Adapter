@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"sync"
 	"time"
-
-	"github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2/ChunkRouter"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
