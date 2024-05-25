@@ -71,7 +71,7 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 
 			byteArray = append(byteArray, buffer[:bytesRead]...)
 			// check if byte array is large enough
-			if len(byteArray) > 4096 {
+			if len(byteArray) > 512 {
 
 				// Expected byte Format
 				// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
@@ -79,7 +79,7 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 				// Lets first check how many bytes in the transport layer message
 				TransportLayerHeaderSize_bytes := 2
 				TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize_bytes])
-				if TransportLayerDataSize > 4096 {
+				if TransportLayerDataSize > 512 {
 					continue
 				}
 
