@@ -5,6 +5,7 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"github.com/gorilla/websocket"
 )
 
 ///
@@ -36,6 +37,7 @@ func (s *ChunkTypeToChannelMap) SendChunkToWebSocket(loggingChannel chan map[zer
 	} else {
 		// or drop data and return false
 		// operate on the router itself
+		loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Here")
 		s.RegisterChunkOnWebSocket(loggingChannel, chunkTypeKey, router)
 		return channelExists
 	}

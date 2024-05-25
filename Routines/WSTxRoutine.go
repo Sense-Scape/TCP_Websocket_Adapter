@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
@@ -52,7 +51,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 		// Unmarshal the JSON string into a map
 		JSONDataString := <-incomingDataChannel
 		var JSONData map[string]interface{}
-		
+
 		if err := json.Unmarshal([]byte(JSONDataString), &JSONData); err != nil {
 			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
 			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "Received JSON as follows { "+JSONDataString+" }")
@@ -76,44 +75,3 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 	}
 }
 
-func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeString string, router *gin.Engine) {
-
-		
-	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Registering on WebSocket: "+chunkTypeString)
-
-	// if we have not started using the map yet then intialise it
-	if s.chunkTypeRoutingMap == nil {
-		chunkTypeChannelMap := make(map[string]chan string)
-		s.chunkTypeRoutingMap = chunkTypeChannelMap
-	}
-
-	s.chunkTypeRoutingMap[chunkTypeString] = make(chan string, 100)
-
-	 router.GET("/DataTypes/"+chunkTypeString, func(c *gin.Context) {
-		// Upgrade the HTTP request into a websocket
-		WebSocketConnection, _ := upgrader.Upgrade(c.Writer, c.Request, nil)
-
-		defer WebSocketConnection.Close()
-
-		currentTime := time.Now()
-		lastTime := currentTime
-
-		// Then start up
-		var dataString, _ = s.GetChannelData(chunkTypeString)
-
-		WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-		for {
-
-			currentTime = time.Now()
-			timeDiff := currentTime.Sub(lastTime)
-
-			var dataString, _ = s.GetChannelData(chunkTypeString)
-
-			// Rate limiting
-			if timeDiff > (time.Millisecond * 1) {
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-				lastTime = currentTime
-			}
-		}
-	})
-}
