@@ -107,28 +107,11 @@ func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[
 	 router.GET("/DataTypes/"+chunkTypeString, func(c *gin.Context) {
 		// Upgrade the HTTP request into a websocket
 		WebSocketConnection, _ := upgrader.Upgrade(c.Writer, c.Request, nil)
-
 		defer WebSocketConnection.Close()
 
-		currentTime := time.Now()
-		lastTime := currentTime
-
-		// Then start up
-		var dataString, _ = s.GetChannelData(chunkTypeString)
-
-		WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 		for {
-
-			currentTime = time.Now()
-			timeDiff := currentTime.Sub(lastTime)
-
 			var dataString, _ = s.GetChannelData(chunkTypeString)
-
-			// Rate limiting
-			if timeDiff > (time.Millisecond * 1) {
-				WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-				lastTime = currentTime
-			}
+			WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 		}
 	})
 }
