@@ -35,10 +35,13 @@ func main() {
 		return
 	}
 
+	routineCount = routineCount + 1
 	LoggingChannel := make(chan map[zerolog.Level]string)
+	go Routines.HandleLogging(serverConfigStringMap, routineCompleteChannel, LoggingChannel)
 
 	routineCount = routineCount + 1
-	go Routines.HandleLogging(serverConfigStringMap, routineCompleteChannel, LoggingChannel)
+	ReportingChannel := make(chan string)
+	go Routines.HandleWSReportingTx(serverConfigStringMap,routineCompleteChannel,LoggingChannel,ReportingChannel)
 
 	routineCount = routineCount + 1
 	GenericChunkChannel := make(chan string)

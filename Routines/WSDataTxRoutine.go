@@ -5,25 +5,19 @@ import (
 	"net/http"
 	"os"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string) {
-
+	
 	// Create websocket variables
 	var port string
 
 	// And then try parse the JSON string
-	if WebSocketTxConfig, exists := configJson["WebSocketTxConfig"].(map[string]interface{}); exists {
+	if WebSocketTxConfig, exists := configJson["WebSocketDataTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
 	} else {
-		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketTxConfig Config not found or not correct")
+		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketDataTxConfig Config not found or not correct")
 		os.Exit(1)
 		return
 	}
