@@ -18,6 +18,7 @@ func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChann
 	if WebSocketTxConfig, exists := configJson["WebSocketReportingTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
 	} else {
+		
 		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketReportingTxConfig Config not found or not correct")
 		os.Exit(1)
 		return
@@ -32,7 +33,7 @@ func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChann
 	}
 
 	go RunReportingRoutine(loggingChannel, routineCompleteChannel, incomingDataChannel, router)
-	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
+	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Starting http router")
 	router.Run(":" + port)
 
 }

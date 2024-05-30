@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
 
-func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string) {
+func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, OutgoingReportingChannel chan<- string) {
 	
 	// Create websocket variables
 	var port string
@@ -30,15 +31,17 @@ func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan 
 		return true
 	}
 
-	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, router)
-	loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Starting http router")
+	go RunChunkRoutingRoutine(loggingChannel, incomingDataChannel, router, OutgoingReportingChannel)
+	loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Starting http router")
 	router.Run(":" + port)
 
 }
 
-func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine) {
+func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine, OutgoingReportingChannel chan<- string) {
 	
 	chunkTypeRoutingMap := new(ChunkTypeToChannelMap)
+	currentTime := time.Now()
+
 	// start up and handle JSON chunks
 	for {
 
@@ -64,6 +67,10 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			sentSuccessfully := chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
 			if !sentSuccessfully {
 					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - newly registered in routing map")
+			}
+
+			if time.Since(currentTime) > 500*time.Millisecond {
+				loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "-------------newly registered in routing map")
 			}
 		}
 	}

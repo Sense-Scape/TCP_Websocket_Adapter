@@ -2,10 +2,10 @@ package Routines
 
 import (
 	"sync"
-	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/gorilla/websocket"
+	"time"
 )
 
 var upgrader = websocket.Upgrader{

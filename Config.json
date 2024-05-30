@@ -7,7 +7,10 @@
     "TCPRxConfig": {
         "Port": "10010"
     },
-    "WebSocketTxConfig": {
+    "WebSocketReportingTxConfig": {
         "Port": "10100"
+    },
+    "WebSocketDataTxConfig": {
+        "Port": "10101"
     }
-}
+}   

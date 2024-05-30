@@ -36,19 +36,20 @@ func main() {
 	}
 
 	routineCount = routineCount + 1
-	LoggingChannel := make(chan map[zerolog.Level]string)
+	LoggingChannel := make(chan map[zerolog.Level]string, 1000)
+
 	go Routines.HandleLogging(serverConfigStringMap, routineCompleteChannel, LoggingChannel)
 
 	routineCount = routineCount + 1
-	ReportingChannel := make(chan string)
+	ReportingChannel := make(chan string, 1000)
 	go Routines.HandleWSReportingTx(serverConfigStringMap,routineCompleteChannel,LoggingChannel,ReportingChannel)
 
 	routineCount = routineCount + 1
-	GenericChunkChannel := make(chan string)
+	GenericChunkChannel := make(chan string, 1000)
 	go Routines.HandleTCPReceivals(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
 
 	routineCount = routineCount + 1
-	go Routines.HandleWSDataChunkTx(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
+	go Routines.HandleWSDataChunkTx(serverConfigStringMap, LoggingChannel, GenericChunkChannel, ReportingChannel)
 
 	for {
 		time.Sleep(60 * time.Second)
