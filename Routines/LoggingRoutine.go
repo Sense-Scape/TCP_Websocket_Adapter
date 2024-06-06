@@ -7,7 +7,17 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func HandleLogging(configJson map[string]interface{}, routineCompleteChannel chan bool, dataChannel chan map[zerolog.Level]string) {
+type SystemStatistic struct {
+	StatEnvironment string `json:"StatEnvironment"`
+	StatName string `json:"StatName"`
+	StatStaus string `json:"StatStaus"`
+}
+
+type SystemInfo struct {
+	SystemStat SystemStatistic `json:"SystemInfo"`
+}
+
+func HandleLogging(configJson map[string]interface{}, routineCompleteChannel chan bool, incomingDataChannel chan map[zerolog.Level]string) {
 
 	// And finally create a logger
 	var LogLevel = zerolog.DebugLevel
@@ -79,7 +89,7 @@ func HandleLogging(configJson map[string]interface{}, routineCompleteChannel cha
 	logger.Info().Msg("Starting logging routine")
 
 	for {
-		levelMessageMap := <-dataChannel
+		levelMessageMap := <-incomingDataChannel
 
 		for logLevelKey, LogMessageString := range levelMessageMap {
 			if logLevelKey == zerolog.DebugLevel {
