@@ -23,28 +23,43 @@ Each string corresponds to channel to send a chunk type to a
 routine that shall handle that chunk
 */
 type ChunkTypeToChannelMap struct {
-	mu                  sync.Mutex               // Mutex to protect access to the map
-	chunkTypeRoutingMap map[string](chan string) // Map of chunk type string and channel key value pairs
-	RoutineWaitGroup	sync.WaitGroup	
+	loggingOutputChannel 	chan map[zerolog.Level]string	// Channel to stream loggin messages
+	chunkTypeRoutingMap 	map[string](chan string) 		// Map of chunk type string and channel key value pairs
+	mu                  	sync.Mutex               		// Mutex to protect access to the map
+	routineWaitGroup		sync.WaitGroup
 }
 
+func NewChunkTypeToChannelMap(loggingOutputChannel 	chan map[zerolog.Level]string) *ChunkTypeToChannelMap {
+    p := new(ChunkTypeToChannelMap)
+    p.loggingOutputChannel = loggingOutputChannel
+    return p
+}
 /*
 Data string will be routed in the map given that chunk type key exists
 */
-func (s *ChunkTypeToChannelMap) SendChunkToWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeKey string, data string, router *gin.Engine) bool {
+func (s *ChunkTypeToChannelMap) SendChunkToWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeKey string, data string, router *gin.Engine) {
 
 	// We first check if the channel exists
 	// And wait to try get it
 	chunkRoutingChannel, channelExists := s.TryGetChannel(chunkTypeKey)
 	if channelExists {
-		// and pass the data if it does
+		// and try pass the data if it does if there is space in the queue
+		if len(chunkRoutingChannel) >= cap(chunkRoutingChannel) {
+			
+			// Note: One should see issues in the status messages. It may be useful to log this but the current
+			// Implementation does not gaurentee that the UI will service all queues which will lead most of them
+			// To be overloaded a lot of the time as only the loaded page will service a particular websocket
+
+			//loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeKey+" - Routing queue overflowwing")
+			return
+		}
 		chunkRoutingChannel <- data
-		return channelExists
+
 	} else {
-		// or drop data and return false
-		// operate on the router itself
+		// If it does not set up a weboscket connection
+		// To manage connections for this chunk type
 		s.RegisterChunkOnWebSocket(loggingChannel, chunkTypeKey, router)
-		return channelExists
+		loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeKey+" - registered for routing")
 	}
 }
 
@@ -73,6 +88,7 @@ func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChanne
 	for {
 		var lockAcquired = make(chan struct{}, 1)
 
+		// Spin this lambda up and try get the channel
 		go func() {
 			s.mu.Lock()
 			extractedChannel, exists = s.chunkTypeRoutingMap[chunkType]
@@ -80,13 +96,14 @@ func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChanne
 			defer close(lockAcquired)
 		}()
 
+		// Wait here until lock aquired channel is closed
 		select {
 		case <-lockAcquired:
 			// Lock was acquired
 			return extractedChannel, exists
 		case <-time.After(1 * time.Millisecond):
 			// Lock was not acquired, sleep and retry
-			time.Sleep(1 * time.Millisecond) // Sleep for 500 milliseconds, you can adjust the duration as needed.
+			time.Sleep(1 * time.Millisecond)
 		}
 	}
 }
@@ -118,19 +135,23 @@ func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[
 				return
 			}
 
-			s.RoutineWaitGroup.Add(2)
+			// Spin up Routines to manage this websocket upgrade request
+			// When this socket is closed all management of this queue is
+			// Stopped leading it to grow to its max capacity and lock up
+			s.routineWaitGroup.Add(2)
 			go s.HandleReceivedSignals(loggingChannel, WebSocketConnection);
 			go s.HandleSignalTransmissions(loggingChannel ,WebSocketConnection, chunkTypeString )
-			s.RoutineWaitGroup.Wait()
+			s.routineWaitGroup.Wait()
 
 	})
 }
 
 func (s *ChunkTypeToChannelMap)HandleReceivedSignals(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn) {
 
-	defer s.RoutineWaitGroup.Done()
+	defer s.routineWaitGroup.Done()
 	
 	for{
+		// We now just wait for the close message
 		_, _, err := WebSocketConnection.ReadMessage()
 		if err != nil {
 			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Issue reading message to WebSocket:"+ err.Error())
@@ -138,14 +159,14 @@ func (s *ChunkTypeToChannelMap)HandleReceivedSignals(loggingChannel chan map[zer
 			break;
 		}
 	}
-
 }
 
 func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn, chunkTypeString string) {
 
-	defer s.RoutineWaitGroup.Done()
+	defer s.routineWaitGroup.Done()
 
 	for {
+		// Now we get the data to transmit on the websocket
 		var dataString, _ = s.GetChannelData(chunkTypeString)
 		err := WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
 		if err != nil {
@@ -154,5 +175,4 @@ func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map
 			break
 		}
 	}
-
 }
