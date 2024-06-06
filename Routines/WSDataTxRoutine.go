@@ -7,6 +7,7 @@ import (
 	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"strconv"
 )
 
 func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, OutgoingReportingChannel chan<- string) {
@@ -17,6 +18,7 @@ func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan 
 	// And then try parse the JSON string
 	if WebSocketTxConfig, exists := configJson["WebSocketDataTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
+		loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "WebSocketDataTxConfig opening on port"  + port)
 	} else {
 		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketDataTxConfig Config not found or not correct")
 		os.Exit(1)
@@ -39,7 +41,7 @@ func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan 
 
 func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine, OutgoingReportingChannel chan<- string) {
 	
-	chunkTypeRoutingMap := new(ChunkTypeToChannelMap)
+	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel)
 	currentTime := time.Now()
 
 	// start up and handle JSON chunks
@@ -64,13 +66,20 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			}
 
 			// And checking if it exists and trying to route it
-			sentSuccessfully := chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
-			if !sentSuccessfully {
-					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - newly registered in routing map")
-			}
+			chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
 
 			if time.Since(currentTime) > 500*time.Millisecond {
-				loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "-------------newly registered in routing map")
+
+				currentTime= time.Now()
+			
+				QueueLogMessage := SystemInfo{SystemStat:SystemStatistic{
+					StatEnvironment: "TCP_WS_Adapter",
+					StatName: chunkTypeStringKey,
+					StatStaus: strconv.Itoa(len(OutgoingReportingChannel)) + "/" + strconv.Itoa(cap(OutgoingReportingChannel)),
+				}}
+				
+				data, _ := json.Marshal(QueueLogMessage)
+				OutgoingReportingChannel <- string(data)
 			}
 		}
 	}
