@@ -8,9 +8,9 @@
         "Port": "10010"
     },
     "WebSocketReportingTxConfig": {
-        "Port": "10100"
+        "Port": "10101"
     },
     "WebSocketDataTxConfig": {
-        "Port": "10101"
+        "Port": "10100"
     }
 }   
