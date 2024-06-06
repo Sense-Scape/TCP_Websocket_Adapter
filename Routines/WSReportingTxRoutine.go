@@ -17,6 +17,7 @@ func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChann
 	// And then try parse the JSON string
 	if WebSocketTxConfig, exists := configJson["WebSocketReportingTxConfig"].(map[string]interface{}); exists {
 		port = WebSocketTxConfig["Port"].(string)
+		loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "WebSocketReportingTxConfig opening on port"  + port)
 	} else {
 		
 		loggingChannel <- CreateLogMessage(zerolog.FatalLevel, "WebSocketReportingTxConfig Config not found or not correct")
@@ -40,7 +41,7 @@ func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChann
 
 func RunReportingRoutine(loggingChannel chan map[zerolog.Level]string, routineCompleteChannel chan bool, incomingDataChannel <-chan string, router *gin.Engine) {
 
-	chunkTypeRoutingMap := new(ChunkTypeToChannelMap)
+	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel)
 
 	for {
 
@@ -48,26 +49,25 @@ func RunReportingRoutine(loggingChannel chan map[zerolog.Level]string, routineCo
 		JSONDataString := <-incomingDataChannel
 		var JSONData map[string]interface{}
 
+		// Try convert the JSON doc to a string
 		if err := json.Unmarshal([]byte(JSONDataString), &JSONData); err != nil {
+			// If it fails, then skip to next interation
 			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
-			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "Received JSON as follows { "+JSONDataString+" }")
-			// return
-		} else {
-			// Then try forward the JSON data onwards
-			// By first getting the root JSON Key (ChunkType)
-			var chunkTypeStringKey string
+			continue
+		} 
+		
+		// Then try forward the JSON data onwards
+		// By first getting the root JSON Key (ChunkType)
+		var chunkTypeStringKey string
 
-			for key := range JSONData {
-				chunkTypeStringKey = key
-				break // We assume there's only one root key
-			}
-
-			// And checking if it exists and trying to route it
-			sentSuccessfully := chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
-			if !sentSuccessfully {
-					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "ChunkType - "+chunkTypeStringKey+" - newly registered in routing map")
-			}
+		// We assume there's only one root key
+		for key := range JSONData {
+			chunkTypeStringKey = key
+			break
 		}
+			
+		// And try tranmit it on the routing threads
+		chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
 	}
 
 	routineCompleteChannel <- true
