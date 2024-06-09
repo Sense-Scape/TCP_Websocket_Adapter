@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-
 	"github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2/Routines"
 	"github.com/rs/zerolog"
 )
@@ -35,17 +34,21 @@ func main() {
 		return
 	}
 
-	LoggingChannel := make(chan map[zerolog.Level]string)
-
 	routineCount = routineCount + 1
+	LoggingChannel := make(chan map[zerolog.Level]string, 1000)
+
 	go Routines.HandleLogging(serverConfigStringMap, routineCompleteChannel, LoggingChannel)
 
 	routineCount = routineCount + 1
-	GenericChunkChannel := make(chan string)
+	ReportingChannel := make(chan string, 1000)
+	go Routines.HandleWSReportingTx(serverConfigStringMap,routineCompleteChannel,LoggingChannel,ReportingChannel)
+
+	routineCount = routineCount + 1
+	GenericChunkChannel := make(chan string, 1000)
 	go Routines.HandleTCPReceivals(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
 
 	routineCount = routineCount + 1
-	go Routines.HandleWebSocketChunkTransmissions(serverConfigStringMap, LoggingChannel, GenericChunkChannel)
+	go Routines.HandleWSDataChunkTx(serverConfigStringMap, LoggingChannel, GenericChunkChannel, ReportingChannel)
 
 	for {
 		time.Sleep(60 * time.Second)
