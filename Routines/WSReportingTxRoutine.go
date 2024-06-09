@@ -9,7 +9,7 @@ import (
 )
 
 
-func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChannel chan bool, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string) {
+func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChannel chan bool, loggingChannel chan map[zerolog.Level]string, incomingDataChannel chan string) {
 
 	// Create websocket variables
 	var port string
@@ -39,9 +39,9 @@ func HandleWSReportingTx(configJson map[string]interface{}, routineCompleteChann
 
 }
 
-func RunReportingRoutine(loggingChannel chan map[zerolog.Level]string, routineCompleteChannel chan bool, incomingDataChannel <-chan string, router *gin.Engine) {
+func RunReportingRoutine(loggingChannel chan map[zerolog.Level]string, routineCompleteChannel chan bool, incomingDataChannel chan string, router *gin.Engine) {
 
-	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel)
+	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel, incomingDataChannel)
 
 	for {
 

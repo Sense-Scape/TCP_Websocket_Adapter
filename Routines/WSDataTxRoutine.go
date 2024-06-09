@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, OutgoingReportingChannel chan<- string) {
+func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, OutgoingReportingChannel chan string) {
 	
 	// Create websocket variables
 	var port string
@@ -39,27 +39,37 @@ func HandleWSDataChunkTx(configJson map[string]interface{}, loggingChannel chan 
 
 }
 
-func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine, OutgoingReportingChannel chan<- string) {
+func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomingDataChannel <-chan string, router *gin.Engine, OutgoingReportingChannel chan string) {
 	
-	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel)
-	currentTime := time.Now()
+	chunkTypeRoutingMap := NewChunkTypeToChannelMap(loggingChannel, OutgoingReportingChannel)
+	currentTime := time.Now()	
 
-	// start up and handle JSON chunks
 	for {
 
-		// Unmarshal the JSON string into a map
-		JSONDataString := <-incomingDataChannel
-		var JSONData map[string]interface{}
+		bSendData := false
+		var strJSONData string
+		timeoutCh := time.After(5 * time.Millisecond)
 
-		if err := json.Unmarshal([]byte(JSONDataString), &JSONData); err != nil {
-			loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
-			// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "Received JSON as follows { "+JSONDataString+" }")
-			// return
-		} else {
+		// Try get data while waiting for a timeout
+		select {
+		case strJSONData = <-incomingDataChannel:
+			bSendData = true
+		case <-timeoutCh:
+		}
+
+		// Then try send the data
+		if bSendData {
+
+			var JSONData map[string]interface{}
+			
+			if err := json.Unmarshal([]byte(strJSONData), &JSONData); err != nil {
+				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
+				continue
+			}
+
 			// Then try forward the JSON data onwards
 			// By first getting the root JSON Key (ChunkType)
 			var chunkTypeStringKey string
-
 			for key := range JSONData {
 				chunkTypeStringKey = key
 				break // We assume there's only one root key
@@ -67,20 +77,20 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 
 			// And checking if it exists and trying to route it
 			chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
+		}
 
-			if time.Since(currentTime) > 500*time.Millisecond {
+		if time.Since(currentTime) > 1000*time.Millisecond {
 
-				currentTime= time.Now()
+			currentTime= time.Now()
 			
-				QueueLogMessage := SystemInfo{SystemStat:SystemStatistic{
-					StatEnvironment: "TCP_WS_Adapter",
-					StatName: chunkTypeStringKey,
-					StatStaus: strconv.Itoa(len(OutgoingReportingChannel)) + "/" + strconv.Itoa(cap(OutgoingReportingChannel)),
-				}}
-				
-				data, _ := json.Marshal(QueueLogMessage)
-				OutgoingReportingChannel <- string(data)
-			}
+			QueueLogMessage := SystemInfo{SystemStat:SystemStatistic{
+				StatEnvironment: "TCP_WS_Adapter",
+				StatName: "Routing_Output_Channel",
+				StatStaus: strconv.Itoa(len(incomingDataChannel)) + "/" + strconv.Itoa(cap(incomingDataChannel)),
+			}}
+			
+			data, _ := json.Marshal(QueueLogMessage)
+			OutgoingReportingChannel <- string(data)
 		}
 	}
 }

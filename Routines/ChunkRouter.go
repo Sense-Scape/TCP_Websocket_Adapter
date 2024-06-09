@@ -2,10 +2,13 @@ package Routines
 
 import (
 	"sync"
+	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/gorilla/websocket"
 	"time"
+	"strconv"
+	"sync/atomic"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,15 +26,16 @@ Each string corresponds to channel to send a chunk type to a
 routine that shall handle that chunk
 */
 type ChunkTypeToChannelMap struct {
-	loggingOutputChannel 	chan map[zerolog.Level]string	// Channel to stream loggin messages
+	loggingOutputChannel 	chan map[zerolog.Level]string	// Channel to stream logging messages
+	reportingOutputChannel 	chan string	// Channel to stream Reporting messages
 	chunkTypeRoutingMap 	map[string](chan string) 		// Map of chunk type string and channel key value pairs
 	mu                  	sync.Mutex               		// Mutex to protect access to the map
-	routineWaitGroup		sync.WaitGroup
 }
 
-func NewChunkTypeToChannelMap(loggingOutputChannel 	chan map[zerolog.Level]string) *ChunkTypeToChannelMap {
+func NewChunkTypeToChannelMap(loggingOutputChannel 	chan map[zerolog.Level]string, reportingOutputChannel chan string) *ChunkTypeToChannelMap {
     p := new(ChunkTypeToChannelMap)
     p.loggingOutputChannel = loggingOutputChannel
+	p.reportingOutputChannel = reportingOutputChannel 
     return p
 }
 /*
@@ -64,20 +68,22 @@ func (s *ChunkTypeToChannelMap) SendChunkToWebSocket(loggingChannel chan map[zer
 }
 
 func (s *ChunkTypeToChannelMap) GetChannelData(chunkTypeKey string) (dataString string, success bool) {
+
 	// We first check if the channel exists
 	// And wait to try get it
 	chunkRoutingChannel, channelExists := s.TryGetChannel(chunkTypeKey)
-	if channelExists {
-		// and pass the data if it does
-		var data = <-chunkRoutingChannel
-		success = true
-		return data, success
-	} else {
-		// or drop data and return false
-		success = false
-		return "", success
+	if !channelExists {
+		return "", false
 	}
 
+	var timeoutCh = time.After(250 * time.Millisecond)
+
+	select {
+	case data := <-chunkRoutingChannel:
+		return data, true
+	case <-timeoutCh:
+		return "", false
+	}
 }
 
 /*
@@ -108,6 +114,16 @@ func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChanne
 	}
 }
 
+func (s *ChunkTypeToChannelMap) GetChannelLengthAndCapacity(chunkTypeString string) (length int, capacity int, exists bool) {
+	var channel,exits = s.TryGetChannel(chunkTypeString)
+
+	if !exits {
+		return -1, -1, exits
+	}
+
+	return len(channel), cap(channel), exits
+}
+
 func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[zerolog.Level]string, chunkTypeString string, router *gin.Engine) {
 
 		
@@ -119,7 +135,7 @@ func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[
 		s.chunkTypeRoutingMap = chunkTypeChannelMap
 	}
 
-	s.chunkTypeRoutingMap[chunkTypeString] = make(chan string, 100)
+	s.chunkTypeRoutingMap[chunkTypeString] = make(chan string, 1000)
 
 	// When you get this HTTP request open the websocket
 	// This permenantly add this to the http 
@@ -127,6 +143,7 @@ func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[
 	router.GET("/DataTypes/"+chunkTypeString, func(c *gin.Context) {
 
             // Upgrade the HTTP request into a websocket
+			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, "Client calling for upgrade on /DataTypes/"+chunkTypeString)
             WebSocketConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 			defer WebSocketConnection.Close()
 
@@ -138,41 +155,102 @@ func (s *ChunkTypeToChannelMap)RegisterChunkOnWebSocket(loggingChannel chan map[
 			// Spin up Routines to manage this websocket upgrade request
 			// When this socket is closed all management of this queue is
 			// Stopped leading it to grow to its max capacity and lock up
-			s.routineWaitGroup.Add(2)
-			go s.HandleReceivedSignals(loggingChannel, WebSocketConnection);
-			go s.HandleSignalTransmissions(loggingChannel ,WebSocketConnection, chunkTypeString )
-			s.routineWaitGroup.Wait()
+
+
+			var AtomicWebsocketClosed atomic.Bool // Atomic integer used as a flag (0: false, 1: true)
+			AtomicWebsocketClosed.Store(false)
+
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go s.HandleReceivedSignals(loggingChannel, WebSocketConnection, &wg, &AtomicWebsocketClosed);
+			go s.HandleSignalTransmissions(loggingChannel ,WebSocketConnection, chunkTypeString, &wg, &AtomicWebsocketClosed )
+			wg.Wait()
+
+			loggingChannel <- CreateLogMessage(zerolog.InfoLevel, chunkTypeString + " Routine shut down")
 
 	})
 }
 
-func (s *ChunkTypeToChannelMap)HandleReceivedSignals(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn) {
+func (s *ChunkTypeToChannelMap)HandleReceivedSignals(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn, wg *sync.WaitGroup, AtomicWebsocketClosed *atomic.Bool) {
 
-	defer s.routineWaitGroup.Done()
+	defer wg.Done()
 	
 	for{
 		// We now just wait for the close message
 		_, _, err := WebSocketConnection.ReadMessage()
 		if err != nil {
-			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Issue reading message to WebSocket:"+ err.Error())
-			WebSocketConnection.Close()
+			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Issue reading message from WebSocket:" + err.Error())
+			AtomicWebsocketClosed.Store(true)
 			break;
 		}
 	}
 }
 
-func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn, chunkTypeString string) {
+func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map[zerolog.Level]string, WebSocketConnection *websocket.Conn, chunkTypeString string, wg *sync.WaitGroup, AtomicWebsocketClosed *atomic.Bool) {
 
-	defer s.routineWaitGroup.Done()
-
+	defer wg.Done()
+	currentTime := time.Now()
+	
 	for {
-		// Now we get the data to transmit on the websocket
-		var dataString, _ = s.GetChannelData(chunkTypeString)
-		err := WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(dataString))
-		if err != nil {
-			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Issue writing message to WebSocket:"+ err.Error())
-			WebSocketConnection.Close()
+		// Unmarshal the JSON string into a map
+		var bChannelExists = false
+		var strJSONData string
+
+		var chstrJSONData = make(chan string, 1)
+		var chbCannelExists = make(chan bool, 1)
+		
+		// Launch a goroutine to try fetch data
+		go func() {
+			strJSONDataTemp, bChannelExistsTmp := s.GetChannelData(chunkTypeString)
+			chbCannelExists <- bChannelExistsTmp
+			chstrJSONData <- strJSONDataTemp
+		}()
+
+		// While also limiting this with a timeout procedure
+		var chTimeout = time.After(250 * time.Millisecond)
+
+		// And see which finihsed first
+		select {
+		case bChannelExists = <-chbCannelExists:
+			strJSONData = <- chstrJSONData
+			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "1")
+		case <-chTimeout:
+			// And continure if a timeout occurred
+			continue
+		}
+
+		// When we have data check the client has not closed out beautiful, stunning and special connection
+		if AtomicWebsocketClosed.Load() {
+			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "RX Websocket closed, exiting write routine")
 			break
+		}
+		
+		// If the connection is open check we successfully got access to the channel and transmit data
+		if bChannelExists {
+			err := WebSocketConnection.WriteMessage(websocket.TextMessage, []byte(strJSONData))
+			if err != nil {
+				loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Issue writing message to WebSocket:"+ err.Error())
+				AtomicWebsocketClosed.Store(true)
+				break
+			}
+		}
+
+		// Then check if we should report the length of this chunks data channel
+		if time.Since(currentTime) > 1000*time.Millisecond {
+
+			var len, cap, _ = s.GetChannelLengthAndCapacity(chunkTypeString)
+			currentTime= time.Now()
+
+			// Create the reporting message
+			QueueLogMessage := SystemInfo{SystemStat:SystemStatistic{
+				StatEnvironment: "TCP_WS_Adapter",
+				StatName: chunkTypeString + "_Channel",
+				StatStaus: strconv.Itoa(len) + "/" + strconv.Itoa(cap),
+			}}
+			
+			// And send it to the dedicated reporting routine
+			data, _ := json.Marshal(QueueLogMessage)
+			s.reportingOutputChannel <- string(data)
 		}
 	}
 }
