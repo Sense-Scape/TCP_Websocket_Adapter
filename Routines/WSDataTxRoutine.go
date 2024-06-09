@@ -76,7 +76,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			}
 
 			// And checking if it exists and trying to route it
-			chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, JSONDataString, router)
+			chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, strJSONData, router)
 		}
 
 		if time.Since(currentTime) > 1000*time.Millisecond {
