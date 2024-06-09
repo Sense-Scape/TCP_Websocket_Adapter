@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"time"
-
 	"github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2/Routines"
 	"github.com/rs/zerolog"
 )
