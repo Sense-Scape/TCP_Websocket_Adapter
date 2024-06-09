@@ -213,7 +213,6 @@ func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map
 		select {
 		case bChannelExists = <-chbCannelExists:
 			strJSONData = <- chstrJSONData
-			loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "1")
 		case <-chTimeout:
 			// And continure if a timeout occurred
 			continue
