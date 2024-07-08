@@ -1,7 +1,7 @@
 {
     "LoggingConfig": {
         "LoggingLevel": "Debug",
-        "LogToFile": "True",
+        "LogToFile": "False",
         "LogToConsole": "True"
     },
     "TCPRxConfig": {

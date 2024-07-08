@@ -76,7 +76,7 @@ func (s *ChunkTypeToChannelMap) GetChannelData(chunkTypeKey string) (dataString 
 		return "", false
 	}
 
-	var timeoutCh = time.After(250 * time.Millisecond)
+	var timeoutCh = time.After(5 * time.Millisecond)
 
 	select {
 	case data := <-chunkRoutingChannel:
@@ -107,9 +107,9 @@ func (s *ChunkTypeToChannelMap) TryGetChannel(chunkType string) (extractedChanne
 		case <-lockAcquired:
 			// Lock was acquired
 			return extractedChannel, exists
-		case <-time.After(1 * time.Millisecond):
+		case <-time.After(5 * time.Millisecond):
 			// Lock was not acquired, sleep and retry
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
 	}
 }
@@ -207,7 +207,7 @@ func (s *ChunkTypeToChannelMap)HandleSignalTransmissions(loggingChannel chan map
 		}()
 
 		// While also limiting this with a timeout procedure
-		var chTimeout = time.After(250 * time.Millisecond)
+		var chTimeout = time.After(5 * time.Millisecond)
 
 		// And see which finihsed first
 		select {
