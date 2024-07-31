@@ -63,7 +63,7 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			var JSONData map[string]interface{}
 			
 			if err := json.Unmarshal([]byte(strJSONData), &JSONData); err != nil {
-				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error())
+				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error unmarshaling JSON in routing routine:"+err.Error()+" - Got " + strJSONData)
 				continue
 			}
 
@@ -76,7 +76,11 @@ func RunChunkRoutingRoutine(loggingChannel chan map[zerolog.Level]string, incomi
 			}
 
 			// And checking if it exists and trying to route it
-			chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, strJSONData, router)
+			if (chunkTypeStringKey == "SystemInfo") {
+				OutgoingReportingChannel <- string(strJSONData)
+			} else {
+				chunkTypeRoutingMap.SendChunkToWebSocket(loggingChannel, chunkTypeStringKey, strJSONData, router)
+			}
 		}
 
 		if time.Since(currentTime) > 1000*time.Millisecond {
