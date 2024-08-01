@@ -7,10 +7,17 @@ import (
 	"time"
 	"github.com/Sense-Scape/Go_TCP_Websocket_Adapter/v2/Routines"
 	"github.com/rs/zerolog"
+	// _ "net/http/pprof"
+    // "net/http"
 )
 
 func main() {
 
+	// uncomment to allow remote memory debugging
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
+	
 	// Create a decoder to read JSON data from the file
 	// Open the JSON file for reading
 	routineCompleteChannel := make(chan bool)
