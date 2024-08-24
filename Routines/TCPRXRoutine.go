@@ -47,9 +47,6 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 
 		// Create a buffer to read incoming data
 
-		var byteArray []byte
-		var JSONByteArray []byte
-
 		previousSessionNumber := uint32(0)
 		previousSequenceNumber := uint32(0)
 		sessionContinuous := false
@@ -57,103 +54,114 @@ func HandleTCPReceivals(configJson map[string]interface{}, loggingChannel chan m
 		LastInSequence := false
 
 		for {
-
-			// Read data from the connection into the buffer
-			buffer := make([]byte, 512)
-			bytesRead, err := conn.Read(buffer)
-			if bytesRead == 0 {
-				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Connection from "+conn.RemoteAddr().String()+" closed")
-				break
-			} else if err != nil {
-				loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error reading:"+err.Error())
-				break
-			}
-
-			byteArray = append(byteArray, buffer[:bytesRead]...)
+			
+			var JSONByteArray []byte
+			var byteArray []byte	
 		
-			// check if byte array is large enough
 			for {
 
-				if len(byteArray) < 512{
+				if len(JSONByteArray) == 0 && len(byteArray) == 0{
 					break
 				}
 
-				// Expected byte Format
-				// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
-
-				// Lets first check how many bytes in the transport layer message
-				TransportLayerHeaderSize_bytes := 2
-				TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize_bytes])
-				if TransportLayerDataSize > 512 {
-					continue
+				// Read data from the connection into the buffer
+				buffer := make([]byte, 512)
+				bytesRead, err := conn.Read(buffer)
+				if bytesRead == 0 {
+					loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Connection from "+conn.RemoteAddr().String()+" closed")
+					break
+				} else if err != nil {
+					loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "Error reading:"+err.Error())
+					break
 				}
 
-				//loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "TransportLayerDataSize:"+fmt.Sprint(TransportLayerDataSize))
+				byteArray = append(byteArray, buffer[:bytesRead]...)
+			
+				// check if byte array is large enough
+				for {
 
-				// The carry on and extract session state information (v1.0.0 of chunk types)
-				SessionLayerHeaderSize_bytes := 23
-				transmissionSize := TransportLayerDataSize
-				TCPHeaderBytes := byteArray[TransportLayerHeaderSize_bytes : SessionLayerHeaderSize_bytes+TransportLayerHeaderSize_bytes]
-				transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
-				// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: Transmission State "+string(transmissionState)+
-				// 	" Session Number "+fmt.Sprint(sessionNumber)+
-				// 	" Sequence Number "+fmt.Sprint(sequenceNumber)+
-				// 	" Transmission Size "+fmt.Sprint(transmissionSize))
+					if len(byteArray) < 512{
+						break
+					}
 
-				// Now we check if the Session in continuous
-				sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
-					CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
-				// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: sessionContinuous "+fmt.Sprint(sessionContinuous)+
-				// 	" newSequence "+fmt.Sprint(newSequence)+
-				// 	" LastInSequence "+fmt.Sprint(LastInSequence))
+					// Expected byte Format
+					// |Transport Header(2)| [Session Header(23)|Session Data(x)] |
 
-				if newSequence && LastInSequence {
-					JSONStartIndex := GetJSONStartIndex()
+					// Lets first check how many bytes in the transport layer message
+					TransportLayerHeaderSize_bytes := 2
+					TransportLayerDataSize := binary.LittleEndian.Uint16(byteArray[:TransportLayerHeaderSize_bytes])
+					if TransportLayerDataSize > 512 {
+						continue
+					}
 
-					JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
-					str := string(JSONByteArray)
-					dataChannel <- str
+					//loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "TransportLayerDataSize:"+fmt.Sprint(TransportLayerDataSize))
 
-					JSONByteArray = nil
-				} else if newSequence && sessionContinuous {
-					// Lets start a new receipt sequence
-					JSONStartIndex := GetJSONStartIndex()
+					// The carry on and extract session state information (v1.0.0 of chunk types)
+					SessionLayerHeaderSize_bytes := 23
+					transmissionSize := TransportLayerDataSize
+					TCPHeaderBytes := byteArray[TransportLayerHeaderSize_bytes : SessionLayerHeaderSize_bytes+TransportLayerHeaderSize_bytes]
+					transmissionState, sessionNumber, sequenceNumber := ConvertBytesToSessionStates(TCPHeaderBytes)
+					// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: Transmission State "+string(transmissionState)+
+					// 	" Session Number "+fmt.Sprint(sessionNumber)+
+					// 	" Sequence Number "+fmt.Sprint(sequenceNumber)+
+					// 	" Transmission Size "+fmt.Sprint(transmissionSize))
 
-					JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
+					// Now we check if the Session in continuous
+					sessionContinuous, newSequence, LastInSequence, previousSessionNumber, previousSequenceNumber =
+						CheckSessionContinuity(transmissionState, sessionNumber, sequenceNumber, previousSessionNumber, previousSequenceNumber)
+					// loggingChannel <- CreateLogMessage(zerolog.DebugLevel, "States: sessionContinuous "+fmt.Sprint(sessionContinuous)+
+					// 	" newSequence "+fmt.Sprint(newSequence)+
+					// 	" LastInSequence "+fmt.Sprint(LastInSequence))
 
-				} else if sessionContinuous && !LastInSequence {
-					// Lets keep accumulating data as we have not finished this continuos sequence
-					JSONStartIndex := 0
-					JSONByteArray = append(JSONByteArray,
-						byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
+					if newSequence && LastInSequence {
+						JSONStartIndex := GetJSONStartIndex()
 
-				} else if sessionContinuous && LastInSequence {
-					// We have finished the sequence so we can pass on
-					JSONStartIndex := 0
-					JSONByteArray = append(JSONByteArray,
-						byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
+						JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
+						str := string(JSONByteArray)
+						dataChannel <- str
 
-					str := string(JSONByteArray)
-					dataChannel <- str
+						JSONByteArray = nil
+					} else if newSequence && sessionContinuous {
+						// Lets start a new receipt sequence
+						JSONStartIndex := GetJSONStartIndex()
 
-					JSONByteArray = nil
-				} else {
-					// There was some error so lets reset
-					JSONByteArray = nil
+						JSONByteArray = byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex : transmissionSize]
 
-					// The reset all states
-					previousSessionNumber = uint32(0)
-					previousSequenceNumber = uint32(0)
-					sessionContinuous = false
-					newSequence = false
-					LastInSequence = false
+					} else if sessionContinuous && !LastInSequence {
+						// Lets keep accumulating data as we have not finished this continuos sequence
+						JSONStartIndex := 0
+						JSONByteArray = append(JSONByteArray,
+							byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
 
-					loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Missed bytes, resetting")
+					} else if sessionContinuous && LastInSequence {
+						// We have finished the sequence so we can pass on
+						JSONStartIndex := 0
+						JSONByteArray = append(JSONByteArray,
+							byteArray[TransportLayerHeaderSize_bytes+SessionLayerHeaderSize_bytes+JSONStartIndex:transmissionSize]...)
+
+						str := string(JSONByteArray)
+						dataChannel <- str
+
+						JSONByteArray = nil
+					} else {
+						// There was some error so lets reset
+						JSONByteArray = nil
+
+						// The reset all states
+						previousSessionNumber = uint32(0)
+						previousSequenceNumber = uint32(0)
+						sessionContinuous = false
+						newSequence = false
+						LastInSequence = false
+
+						loggingChannel <- CreateLogMessage(zerolog.WarnLevel, "Missed bytes, resetting")
+					}
+
+					byteArray = byteArray[TransportLayerDataSize:]
+
 				}
-
-				byteArray = byteArray[TransportLayerDataSize:]
-
 			}
+			
 		}
 		loggingChannel <- CreateLogMessage(zerolog.ErrorLevel, "TCP server still listening on port:"+port)
 	}
